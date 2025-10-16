@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toxic MD Pairing Code</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: url('https://files.catbox.moe/eojuys.jpg') no-repeat center center; /* Removed 'fixed' */
+      background-size: cover; /* Ensures the image covers the viewport without moving */
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #c0d0ff;
+      overflow: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 15, 30, 0.6);
+      z-index: -1;
+    }
+
+    /* Fade-in animation for the page */
+    .container {
+      width: 100%;
+      max-width: 450px;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      animation: fadeIn 1.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: scale(0.95); }
+      50% { transform: scale(1.05); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .box {
+      position: relative;
+      background: linear-gradient(135deg, rgba(20, 30, 50, 0.95), rgba(15, 25, 45, 0.95));
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      border: 2px solid rgba(0, 170, 255, 0.5);
+      box-shadow: 0 10px 25px rgba(0, 50, 150, 0.4), 0 0 20px rgba(0, 170, 255, 0.3);
+      backdrop-filter: blur(8px);
+      animation: glowPulse 4s infinite alternate, borderPulse 6s infinite;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .box:hover {
+      box-shadow: 0 15px 35px rgba(0, 50, 150, 0.6), 0 0 30px rgba(0, 170, 255, 0.5);
+    }
+
+    @keyframes glowPulse {
+      0% { box-shadow: 0 10px 25px rgba(0, 50, 150, 0.4), 0 0 20px rgba(0, 170, 255, 0.3); }
+      100% { box-shadow: 0 12px 30px rgba(0, 70, 150, 0.5), 0 0 25px rgba(0, 170, 255, 0.4); }
+    }
+
+    @keyframes borderPulse {
+      0% { border-color: rgba(0, 170, 255, 0.5); }
+      50% { border-color: rgba(0, 170, 255, 0.7); }
+      100% { border-color: rgba(0, 170, 255, 0.5); }
+    }
+
+    #text {
+      color: #c0d0ff;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .input-container {
+      display: flex;
+      gap: 15px;
+      margin: 30px 0;
+      background: rgba(25, 40, 70, 0.95);
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(0, 170, 255, 0.4);
+      width: 100%;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      transition: border 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .input-container:hover {
+      border: 1px solid rgba(0, 170, 255, 0.8);
+      box-shadow: 0 0 15px rgba(0, 170, 255, 0.4);
+    }
+
+    .input-container::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 0;
+      background: rgba(0, 170, 255, 0.5);
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .input-container.touched::after {
+      width: 100px;
+      height: 100px;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+      animation: ripple 0.5s ease-out;
+    }
+
+    @keyframes ripple {
+      0% { width: 0; height: 0; opacity: 0.5; }
+      100% { width: 100px; height: 100px; opacity: 0; }
+    }
+
+    .input-container input {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: rgba(40, 60, 100, 0.5);
+      color: #ffffff;
+      font-size: 16px;
+      text-align: center;
+      max-width: 220px;
+      type: tel;
+      pattern="[0-9]*";
+      transition: background 0.3s ease, border 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .input-container input::placeholder {
+      color: #a0b8ff;
+      font-style: italic;
+      text-align: center;
+    }
+
+    .input-container input:focus {
+      outline: none;
+      border: 2px solid #00aaff;
+      background: rgba(40, 60, 100, 0.6);
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+    }
+
+    .input-container input:hover {
+      background: rgba(40, 60, 100, 0.7);
+      box-shadow: 0 0 8px rgba(0, 170, 255, 0.3);
+    }
+
+    .input-container button {
+      padding: 16px 30px;
+      background: linear-gradient(135deg, #00aaff 0%, #2a6fff 100%);
+      color: white;
+      border: none;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 170, 255, 0.3);
+      position: relative;
+    }
+
+    .input-container button:hover {
+      background: linear-gradient(135deg, #2a6fff 0%, #00aaff 100%);
+      box-shadow: 0 6px 18px rgba(0, 170, 255, 0.5);
+    }
+
+    .input-container button:active {
+      box-shadow: 0 2px 8px rgba(0, 170, 255, 0.2);
+      transform: scale(0.95);
+    }
+
+    .input-container button::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 0;
+      background: rgba(0, 170, 255, 0.5);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .input-container button.touched::after {
+      width: 80px;
+      height: 80px;
+      opacity: 0;
+      animation: ripple 0.5s ease-out;
+    }
+
+    h3 {
+      position: relative;
+      color: #c0d0ff;
+      font-size: 34px;
+      font-weight: 900;
+      margin: 15px 0;
+      text-shadow: 0 2px 8px rgba(0, 50, 150, 0.5);
+      background: linear-gradient(45deg, #00aaff, #2a6fff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: textPulse 3s infinite alternate;
+    }
+
+    /* Glowing lines only at title */
+    h3::before,
+    h3::after {
+      content: '';
+      position: absolute;
+      background: linear-gradient(90deg, transparent, rgba(0, 170, 255, 0.8), transparent);
+      z-index: -1;
+    }
+
+    h3::before {
+      width: 100%;
+      height: 2px;
+      top: -10px;
+      left: 0;
+      animation: moveLineHorizontal 3s infinite linear;
+    }
+
+    h3::after {
+      width: 2px;
+      height: 100%;
+      top: 0;
+      left: -10px;
+      animation: moveLineVertical 3s infinite linear;
+    }
+
+    @keyframes moveLineHorizontal {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    @keyframes moveLineVertical {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+
+    @keyframes textPulse {
+      0% { text-shadow: 0 2px 8px rgba(0, 50, 150, 0.5); }
+      100% { text-shadow: 0 4px 10px rgba(0, 170, 255, 0.7); }
+    }
+
+    h3::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 65%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(0, 170, 255, 0.7), transparent);
+      animation: underlinePulse 3s infinite alternate;
+    }
+
+    @keyframes underlinePulse {
+      0% { width: 50%; }
+      100% { width: 75%; }
+    }
+
+    .fa-user {
+      color: #c0d0ff;
+      font-size: 28px;
+      margin-bottom: 15px;
+      transition: box-shadow 0.3s ease, color 0.3s ease;
+    }
+
+    .fa-user:hover {
+      color: #00aaff;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+    }
+
+    #pair {
+      margin-top: 30px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+    }
+
+    #pair a, #pair font {
+      color: #c0d0ff;
+      font-size: 20px;
+      font-weight: bold;
+      opacity: 0;
+      animation: slideIn 0.5s ease forwards;
+      transition: box-shadow 0.3s ease, color 0.3s ease;
+    }
+
+    #pair a:hover, #pair font:hover {
+      color: #00aaff;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+    }
+
+    @keyframes slideIn {
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    #copy {
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 20px;
+      user-select: none;
+      transition: color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    #copy:hover {
+      color: #00aaff;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+    }
+
+    /* Copy Button Styling */
+    .copy-button {
+      padding: 12px 24px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #00aaff;
+      border: 1px solid rgba(0, 170, 255, 0.5);
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      animation: slideIn 0.5s ease forwards 0.2s;
+      position: relative;
+    }
+
+    .copy-button i {
+      font-size: 16px;
+      color: #00aaff;
+      transition: color 0.3s ease;
+    }
+
+    .copy-button:hover {
+      background: rgba(0, 0, 0, 0.9);
+      border-color: rgba(0, 170, 255, 0.8);
+      box-shadow: 0 0 15px rgba(0, 170, 255, 0.5);
+    }
+
+    .copy-button:hover i {
+      color: #2a6fff;
+    }
+
+    .copy-button:active {
+      box-shadow: 0 0 5px rgba(0, 170, 255, 0.2);
+      transform: scale(0.95);
+    }
+
+    .copy-button::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 0;
+      background: rgba(0, 170, 255, 0.5);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .copy-button.touched::after {
+      width: 80px;
+      height: 80px;
+      opacity: 0;
+      animation: ripple 0.5s ease-out;
+    }
+
+    .copy-button.copied {
+      background: rgba(0, 0, 0, 0.9);
+      border-color: #28a745;
+      box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+      color: #28a745;
+    }
+
+    .copy-button.copied i {
+      color: #28a745;
+    }
+
+    .copy-button.copied::before {
+      content: '✓ ';
+      font-size: 16px;
+    }
+
+    /* Enhanced Loading Animation with Ring Balls */
+    .loader {
+      display: none;
+      width: 50px;
+      height: 50px;
+      position: relative;
+    }
+
+    .loader .ball {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #00aaff;
+      border-radius: 50%;
+      animation: rotateBalls 2s infinite ease-in-out;
+      box-shadow: 0 0 5px rgba(0, 170, 255, 0.5);
+    }
+
+    .loader .ball:nth-child(1) { animation-delay: 0s; }
+    .loader .ball:nth-child(2) { animation-delay: 0.2s; }
+    .loader .ball:nth-child(3) { animation-delay: 0.4s; }
+    .loader .ball:nth-child(4) { animation-delay: 0.6s; }
+    .loader .ball:nth-child(5) { animation-delay: 0.8s; }
+
+    @keyframes rotateBalls {
+      0% {
+        transform: rotate(0deg) translateX(20px) scale(1);
+        background: #00aaff;
+        opacity: 0.8;
+      }
+      25% {
+        transform: rotate(90deg) translateX(20px) scale(1.2);
+        background: #2a6fff;
+        opacity: 1;
+      }
+      50% {
+        transform: rotate(180deg) translateX(20px) scale(1);
+        background: #00aaff;
+        opacity: 0.8;
+      }
+      75% {
+        transform: rotate(270deg) translateX(20px) scale(1.2);
+        background: #2a6fff;
+        opacity: 1;
+      }
+      100% {
+        transform: rotate(360deg) translateX(20px) scale(1);
+        background: #00aaff;
+        opacity: 0.8;
+      }
+    }
+
+    @media (max-width: 500px) {
+      .container {
+        padding: 10px;
+      }
+
+      .box {
+        padding: 30px;
+      }
+
+      .input-container {
+        flex-direction: column;
+        padding: 12px;
+      }
+
+      .input-container input,
+      .input-container button {
+        width: 100%;
+        padding: 14px;
+        font-size: 15px;
+        max-width: 100%;
+      }
+
+      h3 {
+        font-size: 30px;
+      }
+
+      #pair a, #pair font {
+        font-size: 18px;
+      }
+
+      .copy-button {
+        padding: 10px 20px;
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="box" id="box">
+      <div id="text">
+        <i class="fa fa-user"></i>
+        <h3>TOXIC MD PAIRING CODE</h3>
+        <div class="input-container" id="input-container">
+          <input placeholder="2547xxx" type="tel" id="number" pattern="[0-9]*" placeholder="Enter your Phone Number with Country Code" name="">
+          <button id="submit">Submit</button>
+        </div>
+        <div class="loader" id="waiting-message">
+          <div class="ball"></div>
+          <div class="ball" style="transform: rotate(72deg) translateX(20px)"></div>
+          <div class="ball" style="transform: rotate(144deg) translateX(20px)"></div>
+          <div class="ball" style="transform: rotate(216deg) translateX(20px)"></div>
+          <div class="ball" style="transform: rotate(288deg) translateX(20px)"></div>
+        </div>
+        <main id="pair"></main>
+      </div>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.0.0-alpha.1/axios.min.js"></script>
+  <script>
+    let a = document.getElementById("pair");
+    let b = document.getElementById("submit");
+    let c = document.getElementById("number");
+    let waitingMessage = document.getElementById("waiting-message");
+    let inputContainer = document.getElementById("input-container");
+
+    async function Copy(button) {
+      button.classList.add('touched');
+      let codeElement = document.getElementById("copy");
+      let text = codeElement.innerText.replace('CODE: ', '');
+      await navigator.clipboard.writeText(text);
+      button.classList.add('copied');
+      button.innerHTML = '<i class="fas fa-check"></i> Copied';
+      setTimeout(() => {
+        button.classList.remove('copied');
+        button.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
+      }, 1000);
+    }
+
+    b.addEventListener("click", async (e) => {
+      e.preventDefault();
+      b.classList.add('touched');
+      if (!c.value) {
+        a.innerHTML = '<a style="color:#c0d0ff;font-weight:bold">Enter your WhatsApp number with Country Code</a><br><br>';
+      } else {
+        const Toxic_Tech = c.value.replace(/[^0-9]/g, "");
+        if (Toxic_Tech.length < 11) {
+          a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold">Invalid Number</a><br><br>';
+        } else {
+          let bb = "";
+          let bbc = "";
+          const cc = Toxic_Tech.split('');
+          cc.map(a => {
+            bbc += a;
+            if (bbc.length == 3) {
+              bb += " " + a;
+            } else if (bbc.length == 8) {
+              bb += " " + a;
+            } else {
+              bb += a;
+            }
+          });
+          c.value = "+" + bb;
+          c.style = "color:white;font-size:16px";
+          waitingMessage.style.display = 'block';
+          a.innerHTML = '';
+          let { data } = await axios(`/code?number=${Toxic_Tech}`);
+          waitingMessage.style.display = 'none';
+          let code = data.code || "Service Unavailable";
+          a.innerHTML = `
+            <font id="copy" style="color:#ffffff;font-weight:bold" size="5">CODE: <span style="color:white;font-weight:bold">${code}</span></font>
+            <button class="copy-button" onclick="Copy(this)"><i class="fas fa-copy"></i> Copy Code</button>
+          `;
+        }
+      }
+    });
+
+    // Add touch feedback for input field
+    c.addEventListener("focus", () => {
+      inputContainer.classList.add('touched');
+    });
+
+    c.addEventListener("blur", () => {
+      inputContainer.classList.remove('touched');
+    });
+
+    // Add touch feedback for copy button
+    document.querySelector('.copy-button')?.addEventListener('click', (e) => {
+      e.target.classList.add('touched');
+      setTimeout(() => e.target.classList.remove('touched'), 500);
+    });
+
+    b.addEventListener('mouseup', () => {
+      b.classList.remove('touched');
+    });
+  </script>
+</body>
+</html>

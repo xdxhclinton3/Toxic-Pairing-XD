@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toxic-MD Pairing</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #0a0f1c; /* Dark blue background */
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #e0e7ff; /* Light text for contrast */
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      opacity: 0; /* Start hidden for fade-in */
+      animation: fadeIn 1.5s ease-in-out forwards; /* Fade-in animation */
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #a5b4fc; /* Light indigo for title */
+      margin: 0 0 10px;
+    }
+
+    h2 {
+      font-size: 1.8rem;
+      color: #d1d5db; /* Light gray for subtitle */
+      margin: 0 0 30px;
+      font-weight: 400;
+    }
+
+    .btn {
+      width: 200px;
+      padding: 15px;
+      margin: 10px 0;
+      background: #4f46e5; /* Indigo button */
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .btn:hover {
+      background: #6366f1; /* Lighter indigo on hover */
+    }
+
+    .btn:active {
+      transform: scale(0.98); /* Subtle press effect */
+    }
+
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 2rem;
+      }
+
+      h2 {
+        font-size: 1.5rem;
+      }
+
+      .btn {
+        width: 90%;
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Toxic-MD Pairing</h1>
+    <h2>How do you want to pair?</h2>
+    <button class="btn" onclick="window.location.href='/qr'">QR Code</button>
+    <button class="btn" onclick="window.location.href='/pair'">Pairing Code</button>
+  </div>
+</body>
+</html>
