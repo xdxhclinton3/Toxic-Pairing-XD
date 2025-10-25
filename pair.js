@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
                 },
                 printQRInTerminal: false,
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
-                browser: Browsers.macOS('Safari'),
+                browser: ['Ubuntu', 'Chrome'],
                 syncFullHistory: false,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000
@@ -87,7 +87,8 @@ router.get('/', async (req, res) => {
 > Instagram:
  _https://www.instagram.com/xh_clinton_
  
- > BotRepo: _https://github.com/xhclintohn/Toxic-MD_
+ > BotRepo: 
+ _https://github.com/xhclintohn/Toxic-MD_
  
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`;
