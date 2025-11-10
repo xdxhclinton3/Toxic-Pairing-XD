@@ -1,118 +1,125 @@
-const PastebinAPI = require('pastebin-js');
-const pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL');
-const { makeid } = require('./id');
 const express = require('express');
 const fs = require('fs');
-let router = express.Router();
 const pino = require('pino');
+const { makeid } = require('./id');
+const PastebinAPI = require('pastebin-js');
+const pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL');
+
 const {
-    default: Toxic_Tech,
-    useMultiFileAuthState,
-    delay,
-    makeCacheableSignalKeyStore,
-    Browsers,
-    fetchLatestBaileysVersion
+  default: Toxic_Tech,
+  useMultiFileAuthState,
+  delay,
+  makeCacheableSignalKeyStore,
+  Browsers,
+  fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
-function removeFile(FilePath) {
-    if (!fs.existsSync(FilePath)) return false;
-    fs.rmSync(FilePath, { recursive: true, force: true });
+const router = express.Router();
+
+function removeFile(path) {
+  if (fs.existsSync(path)) fs.rmSync(path, { recursive: true, force: true });
 }
 
 router.get('/', async (req, res) => {
-    const id = makeid();
-    let num = req.query.number;
-    
-    async function Toxic_MD_PAIR_CODE() {
-        const { version } = await fetchLatestBaileysVersion();
-        const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
-        try {
-            let Pair_Code_By_Toxic_Tech = Toxic_Tech({
-                version,
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
-                },
-                printQRInTerminal: false,
-                logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
-                browser: ['Ubuntu', 'Chrome'],
-                syncFullHistory: false,
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000
-            });
+  const id = makeid();
+  const phone = (req.query.number || '').replace(/[^0-9]/g, '');
+  const tempDir = `./temp/${id}`;
 
-            if (!Pair_Code_By_Toxic_Tech.authState.creds.registered) {
-                await delay(1500);
-                num = num.replace(/[^0-9]/g, '');
-                const code = await Pair_Code_By_Toxic_Tech.requestPairingCode(num);
-                if (!res.headersSent) {
-                    await res.send({ code });
-                }
-            }
+  async function startPairing() {
+    try {
+      const { version } = await fetchLatestBaileysVersion();
+      const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            Pair_Code_By_Toxic_Tech.ev.on('creds.update', saveCreds);
-            Pair_Code_By_Toxic_Tech.ev.on('connection.update', async (s) => {
-                const { connection, lastDisconnect } = s;
-                if (connection === 'open') {
-                    await Pair_Code_By_Toxic_Tech.sendMessage(Pair_Code_By_Toxic_Tech.user.id, { text: `
-◈━━━━━━━━━━━◈
-│❒ Hello! 👋 You're now connected to Toxic-MD.
+      const sock = Toxic_Tech({
+        version,
+        logger: pino({ level: 'fatal' }),
+        printQRInTerminal: false,
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' })),
+        },
+        browser: Browsers.ubuntu('Chrome'),
+        syncFullHistory: false,
+      });
 
-│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
-◈━━━━━━━━━━━◈
-` });
-                    await delay(8000);
-                    let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                    await delay(8000);
-                    let b64data = Buffer.from(data).toString('base64');
-                    let session = await Pair_Code_By_Toxic_Tech.sendMessage(Pair_Code_By_Toxic_Tech.user.id, { text: '' + b64data });
+      // === Pairing Code Generation ===
+      if (!sock.authState.creds.registered) {
+        await delay(1200);
+        const code = await sock.requestPairingCode(phone);
+        if (!res.headersSent) res.send({ code });
+      }
 
-                    let Toxic_MD_TEXT = `
-          ◈━━━━━━━◈
-      SESSION CONNECTED
-│❒ The long code above is your **Session ID**. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+      sock.ev.on('creds.update', saveCreds);
 
-│❒ Need help? Reach out to us:
+      sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+        if (connection === 'open') {
+          console.log('✅ Toxic-MD successfully connected to WhatsApp.');
 
-『••• Visit For Help •••』
-> Owner:
- _https://wa.me/254735342808_
- 
-> WaGroup:
- _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
- 
-> WaChannel:
- _https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
+          await sock.sendMessage(sock.user.id, {
+            text: `
+───────────────────────────────
+✅ *Connection Successful!*
 
-> Instagram:
- _https://www.instagram.com/xh_clinton_
- 
- > BotRepo: 
- _https://github.com/xhclintohn/Toxic-MD_
- 
-│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
-◈━━━━━━━━━━━◈`;
+Hello 👋, your device is now securely linked with *Toxic-MD*.
 
-                    await Pair_Code_By_Toxic_Tech.sendMessage(Pair_Code_By_Toxic_Tech.user.id, { text: Toxic_MD_TEXT }, { quoted: session });
+Please wait a few moments while we generate your unique *Session ID*...
+───────────────────────────────
+`,
+          });
 
-                    await delay(100);
-                    await Pair_Code_By_Toxic_Tech.ws.close();
-                    return await removeFile('./temp/' + id);
-                } else if (connection === 'close' && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    await delay(10000);
-                    Toxic_MD_PAIR_CODE();
-                }
-            });
-        } catch (err) {
-            console.log('Service restarted due to error:', err);
-            await removeFile('./temp/' + id);
-            if (!res.headersSent) {
-                await res.send({ code: 'Service Currently Unavailable' });
-            }
+          await delay(8000);
+
+          const credsPath = `${tempDir}/creds.json`;
+          if (!fs.existsSync(credsPath)) return;
+
+          const data = fs.readFileSync(credsPath);
+          const base64 = Buffer.from(data).toString('base64');
+
+          const sentSession = await sock.sendMessage(sock.user.id, { text: base64 });
+
+          const infoMessage = `
+───────────────────────────────
+🗂️ *Session Generated Successfully!*
+
+The long code above is your *Session ID*.
+Keep it safe — you’ll need it when deploying your *Toxic-MD Bot*.
+
+📌 *Helpful Links & Support*
+
+> Owner: https://wa.me/254735342808
+• WhatsApp Group: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI
+• Channel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19
+• Repository: https://github.com/xhclintohn/Toxic-MD
+
+⭐ Don’t forget to star the repo and stay updated!
+───────────────────────────────
+`;
+
+          await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
+
+          await delay(1000);
+          sock.ws.close();
+          removeFile(tempDir);
         }
+
+        // === Handle Disconnection / Retry ===
+        if (
+          connection === 'close' &&
+          lastDisconnect?.error?.output?.statusCode !== 401
+        ) {
+          console.log('⚠️ Connection lost. Retrying...');
+          await delay(5000);
+          startPairing();
+        }
+      });
+    } catch (err) {
+      console.error('❌ Error during pairing:', err);
+      removeFile(tempDir);
+      if (!res.headersSent) res.send({ code: 'Service Unavailable. Please try again.' });
     }
-    
-    return await Toxic_MD_PAIR_CODE();
+  }
+
+  await startPairing();
 });
 
 module.exports = router;
