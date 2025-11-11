@@ -57,13 +57,11 @@ router.get('/', async (req, res) => {
 
           await sock.sendMessage(sock.user.id, {
             text: `
-───────────────────────────────
-✅ *Connection Successful!*
+◈━━━━━━━━━━━◈
+│❒ Hello! 👋 You're now connected to Toxic-MD.
 
-Hello 👋, your device is now securely linked with *Toxic-MD*.
-
-Please wait a few moments while we generate your unique *Session ID*...
-───────────────────────────────
+│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+◈━━━━━━━━━━━◈
 `,
           });
 
@@ -78,22 +76,29 @@ Please wait a few moments while we generate your unique *Session ID*...
           const sentSession = await sock.sendMessage(sock.user.id, { text: base64 });
 
           const infoMessage = `
-───────────────────────────────
-🗂️ *Session Generated Successfully!*
+          ◈━━━━━━━◈
+      SESSION CONNECTED
+│❒ The long code above is your **Session ID**. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
 
-The long code above is your *Session ID*.
-Keep it safe — you’ll need it when deploying your *Toxic-MD Bot*.
+│❒ Need help? Reach out to us:
 
-📌 *Helpful Links & Support*
+『••• Visit For Help •••』
+> Owner:
+ _https://wa.me/254735342808_
+ 
+> WaGroup:
+ _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
+ 
+> WaChannel:
+ _https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
 
-> Owner: https://wa.me/254735342808
-• WhatsApp Group: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI
-• Channel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19
-• Repository: https://github.com/xhclintohn/Toxic-MD
-
-⭐ Don’t forget to star the repo and stay updated!
-───────────────────────────────
-`;
+> Instagram:
+ _https://www.instagram.com/xh_clinton_
+ 
+ > BotRepo: _https://github.com/xhclintohn/Toxic-MD_
+ 
+│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
+◈━━━━━━━━━━━◈`;
 
           await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
