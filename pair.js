@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' })),
         },
-        browser: Browsers.ubuntu('Chrome'),
+        browser: Browsers.ubuntu("Chrome"),
         syncFullHistory: false,
       });
 
