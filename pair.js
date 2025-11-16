@@ -42,8 +42,8 @@ router.get('/', async (req, res) => {
         syncFullHistory: false,
       });
 
-      // === Pairing Code Generation ===
-      if (!sock.authState.creds.registered) {
+      // === FIXED: Correct registered check ===
+      if (!state.creds.registered) {
         await delay(1200);
         const code = await sock.requestPairingCode(phone);
         if (!res.headersSent) res.send({ code });
@@ -102,8 +102,12 @@ router.get('/', async (req, res) => {
 
           await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-          await delay(1000);
+          // === FIXED: Allow messages to finish sending ===
+          await delay(3000);
           sock.ws.close();
+
+          // === FIXED: Prevent early deletion ===
+          await delay(1500);
           removeFile(tempDir);
         }
 
