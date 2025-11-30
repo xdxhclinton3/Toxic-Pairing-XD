@@ -38,13 +38,13 @@ router.get('/', async (req, res) => {
                     creds: state.creds,  
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' })),  
                 },  
-                browser: ["Ubuntu", "Chrome", "128"], 
+                browser: ["Ubuntu", "Chrome", "125"], 
                 syncFullHistory: false,  
             });  
 
             // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {  
-                await delay(1200);  
+                await delay(1500);  
                 const code = await sock.requestPairingCode(phone);  
                 if (!res.headersSent) res.send({ code });  
             }  
@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
 `,
                     });
 
-                    await delay(8000);  
+                    await delay(10000);  
 
                     const credsPath = `${tempDir}/creds.json`;  
                     if (!fs.existsSync(credsPath)) return;  
@@ -127,7 +127,7 @@ https://www.instagram.com/xh_clinton
                     lastDisconnect?.error?.output?.statusCode !== 401  
                 ) {  
                     console.log('⚠️ Connection lost. Retrying...');  
-                    await delay(5000);  
+                    await delay(10000);  
                     startPairing();  
                 }  
             });  
