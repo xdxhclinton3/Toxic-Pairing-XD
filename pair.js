@@ -51,13 +51,13 @@ router.get('/', async (req, res) => {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
                 },
-                browser: ["Ubuntu", "Chrome", "125"], // Changed to Ubuntu Chrome as requested
+                browser: ["Ubuntu", "Chrome", "125"],
                 syncFullHistory: false,
                 generateHighQualityLinkPreview: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
                 getMessage: async () => undefined,
                 markOnlineOnConnect: true,
-                connectTimeoutMs: 120000, // Increased for weak connection
+                connectTimeoutMs: 120000,
                 keepAliveIntervalMs: 30000,
                 emitOwnEvents: true,
                 fireInitQueries: true,
@@ -66,12 +66,12 @@ router.get('/', async (req, res) => {
                     maxCommitRetries: 10,
                     delayBetweenTriesMs: 3000
                 },
-                retryRequestDelayMs: 10000 // Added for retry delay
+                retryRequestDelayMs: 10000
             });
 
             // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
-                await delay(2000); // Increased delay
+                await delay(2000); 
                 const code = await sock.requestPairingCode(num);
                 if (!responseSent && !res.headersSent) {
                     res.json({ code: code });
@@ -102,11 +102,11 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                    await delay(15000); // Increased wait time for weak connection
+                    await delay(15000);
 
                     const credsPath = path.join(tempDir, "creds.json");
                     
-                    // Try reading session with multiple attempts
+                 
                     let sessionData = null;
                     let attempts = 0;
                     const maxAttempts = 10;
@@ -115,12 +115,12 @@ router.get('/', async (req, res) => {
                         try {
                             if (fs.existsSync(credsPath)) {
                                 const data = fs.readFileSync(credsPath);
-                                if (data && data.length > 50) { // Reduced minimum length
+                                if (data && data.length > 50) {
                                     sessionData = data;
                                     break;
                                 }
                             }
-                            await delay(4000); // Shorter delay between attempts
+                            await delay(4000);
                             attempts++;
                         } catch (readError) {
                             console.error("Read attempt error:", readError);
@@ -222,11 +222,11 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
-    // Add timeout for the whole process
+ 
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
-        }, 180000); // 3 minutes timeout
+        }, 180000);
     });
 
     try {
