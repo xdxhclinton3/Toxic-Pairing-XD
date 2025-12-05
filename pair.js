@@ -10,7 +10,7 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-    fetchLatestBaileysVersion,
+    fetchLatestWaWebVersion,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
-            const { version } = await fetchLatestBaileysVersion();
+            const { version } = await fetchLatestWaWebVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
@@ -105,8 +105,8 @@ router.get('/', async (req, res) => {
                     await delay(15000);
 
                     const credsPath = path.join(tempDir, "creds.json");
-                    
-                 
+
+
                     let sessionData = null;
                     let attempts = 0;
                     const maxAttempts = 10;
@@ -222,7 +222,7 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
- 
+
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
