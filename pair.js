@@ -10,7 +10,7 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-    fetchLatestWaWebVersion,
+    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
-            const { version } = await fetchLatestWaWebVersion();
+            const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
