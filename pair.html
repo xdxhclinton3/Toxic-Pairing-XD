@@ -6,76 +6,299 @@
   <title>Toxic MD Pairing Code</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      margin: 0;
-      background: url('https://files.catbox.moe/eojuys.jpg') no-repeat center center; /* Removed 'fixed' */
-      background-size: cover; /* Ensures the image covers the viewport without moving */
+      background: #0a0e1a;
       font-family: 'Segoe UI', Arial, sans-serif;
       color: #c0d0ff;
       overflow: hidden;
+      position: relative;
     }
-    body::before {
-      content: '';
+
+    /* Live Tech Background Animation */
+    .tech-background {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5, 15, 30, 0.6);
       z-index: -1;
+      overflow: hidden;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(0, 100, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(0, 170, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 80%, rgba(0, 255, 200, 0.1) 0%, transparent 50%);
     }
 
-    /* Fade-in animation for the page */
+    .grid-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 200%;
+      height: 200%;
+      background-image: 
+        linear-gradient(rgba(0, 170, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 170, 255, 0.05) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: moveGrid 20s linear infinite;
+      transform-origin: center;
+    }
+
+    @keyframes moveGrid {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(-25px, -25px) rotate(0.5deg); }
+    }
+
+    .floating-elements {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+
+    .floating-element {
+      position: absolute;
+      background: rgba(0, 170, 255, 0.1);
+      border: 1px solid rgba(0, 170, 255, 0.2);
+      border-radius: 50%;
+      animation: float 15s infinite linear;
+    }
+
+    .floating-element:nth-child(1) {
+      width: 60px;
+      height: 60px;
+      top: 20%;
+      left: 10%;
+      animation-delay: 0s;
+    }
+
+    .floating-element:nth-child(2) {
+      width: 40px;
+      height: 40px;
+      top: 60%;
+      left: 80%;
+      animation-delay: -5s;
+    }
+
+    .floating-element:nth-child(3) {
+      width: 80px;
+      height: 80px;
+      top: 80%;
+      left: 20%;
+      animation-delay: -10s;
+    }
+
+    .floating-element:nth-child(4) {
+      width: 30px;
+      height: 30px;
+      top: 30%;
+      left: 70%;
+      animation-delay: -3s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+        box-shadow: 0 0 20px rgba(0, 170, 255, 0.3);
+      }
+      33% {
+        transform: translate(30px, -30px) rotate(120deg);
+        box-shadow: 0 0 30px rgba(0, 100, 255, 0.4);
+      }
+      66% {
+        transform: translate(-20px, 20px) rotate(240deg);
+        box-shadow: 0 0 25px rgba(0, 255, 200, 0.4);
+      }
+    }
+
+    .data-stream {
+      position: absolute;
+      width: 2px;
+      height: 100%;
+      background: linear-gradient(to bottom, transparent, rgba(0, 170, 255, 0.5), transparent);
+      animation: streamFlow 3s linear infinite;
+    }
+
+    .data-stream:nth-child(5) { left: 15%; animation-delay: 0s; }
+    .data-stream:nth-child(6) { left: 35%; animation-delay: -1s; }
+    .data-stream:nth-child(7) { left: 65%; animation-delay: -0.5s; }
+    .data-stream:nth-child(8) { left: 85%; animation-delay: -2s; }
+
+    @keyframes streamFlow {
+      0% {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      10%, 90% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+    }
+
     .container {
       width: 100%;
-      max-width: 450px;
+      max-width: 480px;
       padding: 20px;
       display: flex;
       justify-content: center;
       align-items: center;
-      animation: fadeIn 1.5s ease-in-out;
+      opacity: 0;
+      animation: fadeIn 1s ease-out forwards;
+      will-change: opacity, transform;
+      position: relative;
+      z-index: 1;
     }
 
     @keyframes fadeIn {
-      0% { opacity: 0; transform: scale(0.95); }
-      50% { transform: scale(1.05); }
-      100% { opacity: 1; transform: scale(1); }
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
     }
 
     .box {
       position: relative;
-      background: linear-gradient(135deg, rgba(20, 30, 50, 0.95), rgba(15, 25, 45, 0.95));
-      padding: 40px;
+      background: linear-gradient(135deg, rgba(10, 20, 40, 0.95), rgba(5, 15, 30, 0.95));
+      padding: 40px 35px;
       border-radius: 20px;
       text-align: center;
-      border: 2px solid rgba(0, 170, 255, 0.5);
-      box-shadow: 0 10px 25px rgba(0, 50, 150, 0.4), 0 0 20px rgba(0, 170, 255, 0.3);
-      backdrop-filter: blur(8px);
-      animation: glowPulse 4s infinite alternate, borderPulse 6s infinite;
+      border: 1px solid rgba(0, 170, 255, 0.3);
+      box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(0, 170, 255, 0.15),
+        inset 0 0 30px rgba(0, 170, 255, 0.05);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      transition: box-shadow 0.3s ease;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transform: translateZ(0);
+      overflow: hidden;
+    }
+
+    .box::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, #00aaff, #2a6fff, #00ffcc);
+      z-index: -1;
+      border-radius: 22px;
+      opacity: 0.3;
+      animation: borderGlow 3s linear infinite;
+    }
+
+    @keyframes borderGlow {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.5; }
     }
 
     .box:hover {
-      box-shadow: 0 15px 35px rgba(0, 50, 150, 0.6), 0 0 30px rgba(0, 170, 255, 0.5);
+      transform: translateY(-5px);
+      box-shadow: 
+        0 15px 40px rgba(0, 0, 0, 0.6),
+        0 0 40px rgba(0, 170, 255, 0.2),
+        inset 0 0 40px rgba(0, 170, 255, 0.1);
     }
 
-    @keyframes glowPulse {
-      0% { box-shadow: 0 10px 25px rgba(0, 50, 150, 0.4), 0 0 20px rgba(0, 170, 255, 0.3); }
-      100% { box-shadow: 0 12px 30px rgba(0, 70, 150, 0.5), 0 0 25px rgba(0, 170, 255, 0.4); }
+    /* Bot Logo/Icon */
+    .bot-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      position: relative;
+      animation: botFloat 3s ease-in-out infinite;
     }
 
-    @keyframes borderPulse {
-      0% { border-color: rgba(0, 170, 255, 0.5); }
-      50% { border-color: rgba(0, 170, 255, 0.7); }
-      100% { border-color: rgba(0, 170, 255, 0.5); }
+    @keyframes botFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(5deg); }
+    }
+
+    .bot-head {
+      width: 70px;
+      height: 70px;
+      background: linear-gradient(135deg, #00aaff, #2a6fff);
+      border-radius: 50% 50% 40% 40%;
+      position: relative;
+      margin: 0 auto;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 170, 255, 0.3);
+    }
+
+    .bot-screen {
+      width: 50px;
+      height: 25px;
+      background: rgba(0, 10, 20, 0.9);
+      border-radius: 10px;
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      overflow: hidden;
+      border: 2px solid rgba(0, 170, 255, 0.5);
+    }
+
+    .screen-content {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .screen-line {
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: #00ffcc;
+      animation: scanLine 2s linear infinite;
+    }
+
+    @keyframes scanLine {
+      0% { top: 0; opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .screen-dot {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #00aaff;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    .screen-dot:nth-child(2) { top: 5px; left: 10px; animation-delay: 0.2s; }
+    .screen-dot:nth-child(3) { top: 15px; left: 25px; animation-delay: 0.4s; }
+    .screen-dot:nth-child(4) { top: 5px; left: 40px; animation-delay: 0.6s; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    .bot-body {
+      width: 60px;
+      height: 10px;
+      background: linear-gradient(90deg, #2a6fff, #00aaff);
+      border-radius: 5px;
+      position: absolute;
+      bottom: -5px;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
     #text {
@@ -87,213 +310,143 @@
       align-items: center;
     }
 
+    h3 {
+      position: relative;
+      color: #c0d0ff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 20px 0 25px;
+      background: linear-gradient(45deg, #00aaff, #00ffcc);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-shadow: 0 2px 10px rgba(0, 170, 255, 0.3);
+    }
+
+    h3::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00aaff, transparent);
+      animation: widthPulse 3s infinite alternate;
+    }
+
+    @keyframes widthPulse {
+      0% { width: 80px; opacity: 0.7; }
+      100% { width: 120px; opacity: 1; }
+    }
+
+    .subtitle {
+      color: #a0b8ff;
+      font-size: 14px;
+      margin-bottom: 25px;
+      font-weight: 300;
+      opacity: 0.8;
+    }
+
     .input-container {
       display: flex;
-      gap: 15px;
-      margin: 30px 0;
-      background: rgba(25, 40, 70, 0.95);
-      padding: 10px;
-      border-radius: 14px;
-      border: 1px solid rgba(0, 170, 255, 0.4);
+      gap: 12px;
+      margin: 20px 0 25px;
+      background: rgba(20, 30, 50, 0.8);
+      padding: 12px;
+      border-radius: 15px;
+      border: 1px solid rgba(0, 170, 255, 0.3);
       width: 100%;
       justify-content: center;
       align-items: center;
       position: relative;
-      transition: border 0.3s ease, box-shadow 0.3s ease;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
     }
 
     .input-container:hover {
-      border: 1px solid rgba(0, 170, 255, 0.8);
-      box-shadow: 0 0 15px rgba(0, 170, 255, 0.4);
-    }
-
-    .input-container::after {
-      content: '';
-      position: absolute;
-      width: 0;
-      height: 0;
-      background: rgba(0, 170, 255, 0.5);
-      border-radius: 50%;
-      transition: all 0.3s ease;
-      pointer-events: none;
-    }
-
-    .input-container.touched::after {
-      width: 100px;
-      height: 100px;
-      opacity: 0;
-      transform: translate(-50%, -50%);
-      animation: ripple 0.5s ease-out;
-    }
-
-    @keyframes ripple {
-      0% { width: 0; height: 0; opacity: 0.5; }
-      100% { width: 100px; height: 100px; opacity: 0; }
+      border-color: rgba(0, 170, 255, 0.6);
+      box-shadow: 
+        inset 0 2px 10px rgba(0, 0, 0, 0.3),
+        0 0 15px rgba(0, 170, 255, 0.2);
     }
 
     .input-container input {
       flex: 1;
-      padding: 16px;
+      padding: 15px;
       border: none;
       border-radius: 12px;
-      background: rgba(40, 60, 100, 0.5);
+      background: rgba(30, 45, 70, 0.9);
       color: #ffffff;
       font-size: 16px;
       text-align: center;
       max-width: 220px;
-      type: tel;
-      pattern="[0-9]*";
-      transition: background 0.3s ease, border 0.3s ease, box-shadow 0.3s ease;
+      transition: all 0.3s ease;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
     }
 
     .input-container input::placeholder {
       color: #a0b8ff;
       font-style: italic;
       text-align: center;
+      opacity: 0.7;
     }
 
     .input-container input:focus {
       outline: none;
-      border: 2px solid #00aaff;
-      background: rgba(40, 60, 100, 0.6);
-      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
-    }
-
-    .input-container input:hover {
-      background: rgba(40, 60, 100, 0.7);
-      box-shadow: 0 0 8px rgba(0, 170, 255, 0.3);
+      background: rgba(40, 60, 90, 0.9);
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
     }
 
     .input-container button {
-      padding: 16px 30px;
+      padding: 15px 28px;
       background: linear-gradient(135deg, #00aaff 0%, #2a6fff 100%);
       color: white;
       border: none;
       border-radius: 30px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease, box-shadow 0.3s ease;
-      box-shadow: 0 4px 12px rgba(0, 170, 255, 0.3);
+      transition: all 0.3s ease;
       position: relative;
-    }
-
-    .input-container button:hover {
-      background: linear-gradient(135deg, #2a6fff 0%, #00aaff 100%);
-      box-shadow: 0 6px 18px rgba(0, 170, 255, 0.5);
-    }
-
-    .input-container button:active {
-      box-shadow: 0 2px 8px rgba(0, 170, 255, 0.2);
-      transform: scale(0.95);
+      overflow: hidden;
+      transform: translateZ(0);
+      letter-spacing: 0.5px;
     }
 
     .input-container button::after {
       content: '';
       position: absolute;
-      width: 0;
-      height: 0;
-      background: rgba(0, 170, 255, 0.5);
-      border-radius: 50%;
       top: 50%;
       left: 50%;
+      width: 0;
+      height: 0;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
       transform: translate(-50%, -50%);
-      transition: all 0.3s ease;
-      pointer-events: none;
+      transition: width 0.4s ease, height 0.4s ease;
     }
 
-    .input-container button.touched::after {
-      width: 80px;
-      height: 80px;
-      opacity: 0;
-      animation: ripple 0.5s ease-out;
+    .input-container button:hover::after {
+      width: 120px;
+      height: 120px;
     }
 
-    h3 {
-      position: relative;
-      color: #c0d0ff;
-      font-size: 34px;
-      font-weight: 900;
-      margin: 15px 0;
-      text-shadow: 0 2px 8px rgba(0, 50, 150, 0.5);
-      background: linear-gradient(45deg, #00aaff, #2a6fff);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      animation: textPulse 3s infinite alternate;
+    .input-container button:hover {
+      background: linear-gradient(135deg, #2a6fff 0%, #00aaff 100%);
+      transform: scale(1.05);
+      box-shadow: 0 5px 20px rgba(0, 170, 255, 0.4);
     }
 
-    /* Glowing lines only at title */
-    h3::before,
-    h3::after {
-      content: '';
-      position: absolute;
-      background: linear-gradient(90deg, transparent, rgba(0, 170, 255, 0.8), transparent);
-      z-index: -1;
-    }
-
-    h3::before {
-      width: 100%;
-      height: 2px;
-      top: -10px;
-      left: 0;
-      animation: moveLineHorizontal 3s infinite linear;
-    }
-
-    h3::after {
-      width: 2px;
-      height: 100%;
-      top: 0;
-      left: -10px;
-      animation: moveLineVertical 3s infinite linear;
-    }
-
-    @keyframes moveLineHorizontal {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
-    }
-
-    @keyframes moveLineVertical {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-
-    @keyframes textPulse {
-      0% { text-shadow: 0 2px 8px rgba(0, 50, 150, 0.5); }
-      100% { text-shadow: 0 4px 10px rgba(0, 170, 255, 0.7); }
-    }
-
-    h3::after {
-      content: '';
-      position: absolute;
-      bottom: -10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 65%;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, rgba(0, 170, 255, 0.7), transparent);
-      animation: underlinePulse 3s infinite alternate;
-    }
-
-    @keyframes underlinePulse {
-      0% { width: 50%; }
-      100% { width: 75%; }
-    }
-
-    .fa-user {
-      color: #c0d0ff;
-      font-size: 28px;
-      margin-bottom: 15px;
-      transition: box-shadow 0.3s ease, color 0.3s ease;
-    }
-
-    .fa-user:hover {
-      color: #00aaff;
-      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+    .input-container button:active {
+      transform: scale(0.98);
     }
 
     #pair {
-      margin-top: 30px;
+      margin-top: 25px;
       width: 100%;
       display: flex;
       flex-direction: column;
@@ -304,102 +457,74 @@
 
     #pair a, #pair font {
       color: #c0d0ff;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       opacity: 0;
-      animation: slideIn 0.5s ease forwards;
-      transition: box-shadow 0.3s ease, color 0.3s ease;
-    }
-
-    #pair a:hover, #pair font:hover {
-      color: #00aaff;
-      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+      animation: slideIn 0.4s ease forwards;
+      transition: color 0.3s ease;
     }
 
     @keyframes slideIn {
-      0% { opacity: 0; transform: translateY(20px); }
+      0% { opacity: 0; transform: translateY(15px); }
       100% { opacity: 1; transform: translateY(0); }
+    }
+
+    #pair a:hover, #pair font:hover {
+      color: #00ffcc;
     }
 
     #copy {
       color: #ffffff;
       font-weight: bold;
-      font-size: 20px;
+      font-size: 18px;
       user-select: none;
-      transition: color 0.3s ease, box-shadow 0.3s ease;
+      transition: color 0.3s ease;
+      font-family: 'Courier New', monospace;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 170, 255, 0.3);
     }
 
     #copy:hover {
       color: #00aaff;
-      box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+      border-color: rgba(0, 170, 255, 0.6);
     }
 
-    /* Copy Button Styling */
     .copy-button {
-      padding: 12px 24px;
-      background: rgba(0, 0, 0, 0.8);
+      padding: 12px 25px;
+      background: linear-gradient(135deg, rgba(0, 170, 255, 0.2), rgba(42, 111, 255, 0.2));
       color: #00aaff;
       border: 1px solid rgba(0, 170, 255, 0.5);
-      border-radius: 30px;
+      border-radius: 25px;
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease, box-shadow 0.3s ease;
-      box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
+      transition: all 0.3s ease;
       display: flex;
       align-items: center;
       gap: 8px;
       opacity: 0;
-      animation: slideIn 0.5s ease forwards 0.2s;
+      animation: slideIn 0.4s ease forwards 0.1s;
       position: relative;
-    }
-
-    .copy-button i {
-      font-size: 16px;
-      color: #00aaff;
-      transition: color 0.3s ease;
+      overflow: hidden;
+      transform: translateZ(0);
     }
 
     .copy-button:hover {
-      background: rgba(0, 0, 0, 0.9);
+      background: linear-gradient(135deg, rgba(0, 170, 255, 0.3), rgba(42, 111, 255, 0.3));
       border-color: rgba(0, 170, 255, 0.8);
-      box-shadow: 0 0 15px rgba(0, 170, 255, 0.5);
-    }
-
-    .copy-button:hover i {
-      color: #2a6fff;
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(0, 170, 255, 0.3);
     }
 
     .copy-button:active {
-      box-shadow: 0 0 5px rgba(0, 170, 255, 0.2);
-      transform: scale(0.95);
-    }
-
-    .copy-button::after {
-      content: '';
-      position: absolute;
-      width: 0;
-      height: 0;
-      background: rgba(0, 170, 255, 0.5);
-      border-radius: 50%;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      transition: all 0.3s ease;
-      pointer-events: none;
-    }
-
-    .copy-button.touched::after {
-      width: 80px;
-      height: 80px;
-      opacity: 0;
-      animation: ripple 0.5s ease-out;
+      transform: scale(0.98);
     }
 
     .copy-button.copied {
-      background: rgba(0, 0, 0, 0.9);
+      background: linear-gradient(135deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0.3));
       border-color: #28a745;
-      box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
       color: #28a745;
     }
 
@@ -407,91 +532,121 @@
       color: #28a745;
     }
 
-    .copy-button.copied::before {
-      content: '✓ ';
-      font-size: 16px;
-    }
-
-    /* Enhanced Loading Animation with Ring Balls */
+    /* Optimized Loading Animation */
     .loader {
       display: none;
       width: 50px;
       height: 50px;
       position: relative;
+      margin: 20px auto;
     }
 
-    .loader .ball {
+    .loader .orbital {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      animation: rotate 2s linear infinite;
+    }
+
+    .loader .dot {
       position: absolute;
       width: 10px;
       height: 10px;
       background: #00aaff;
       border-radius: 50%;
-      animation: rotateBalls 2s infinite ease-in-out;
-      box-shadow: 0 0 5px rgba(0, 170, 255, 0.5);
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: pulseDot 1.5s ease-in-out infinite;
     }
 
-    .loader .ball:nth-child(1) { animation-delay: 0s; }
-    .loader .ball:nth-child(2) { animation-delay: 0.2s; }
-    .loader .ball:nth-child(3) { animation-delay: 0.4s; }
-    .loader .ball:nth-child(4) { animation-delay: 0.6s; }
-    .loader .ball:nth-child(5) { animation-delay: 0.8s; }
+    .loader .dot:nth-child(2) {
+      animation-delay: 0.5s;
+      background: #2a6fff;
+    }
 
-    @keyframes rotateBalls {
-      0% {
-        transform: rotate(0deg) translateX(20px) scale(1);
-        background: #00aaff;
-        opacity: 0.8;
-      }
-      25% {
-        transform: rotate(90deg) translateX(20px) scale(1.2);
-        background: #2a6fff;
-        opacity: 1;
-      }
-      50% {
-        transform: rotate(180deg) translateX(20px) scale(1);
-        background: #00aaff;
-        opacity: 0.8;
-      }
-      75% {
-        transform: rotate(270deg) translateX(20px) scale(1.2);
-        background: #2a6fff;
-        opacity: 1;
-      }
-      100% {
-        transform: rotate(360deg) translateX(20px) scale(1);
-        background: #00aaff;
-        opacity: 0.8;
+    .loader .dot:nth-child(3) {
+      animation-delay: 1s;
+      background: #00ffcc;
+    }
+
+    @keyframes rotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: translateX(-50%) scale(0.8); opacity: 0.5; }
+      50% { transform: translateX(-50%) scale(1.2); opacity: 1; }
+    }
+
+    .bot-message {
+      color: #a0b8ff;
+      font-size: 13px;
+      margin-top: 20px;
+      padding: 10px 15px;
+      background: rgba(0, 170, 255, 0.05);
+      border-radius: 10px;
+      border-left: 3px solid #00aaff;
+      text-align: left;
+      width: 100%;
+      font-style: italic;
+    }
+
+    /* Reduced motion for accessibility */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
       }
     }
 
     @media (max-width: 500px) {
       .container {
-        padding: 10px;
+        padding: 15px;
       }
 
       .box {
-        padding: 30px;
+        padding: 30px 25px;
+        border-radius: 18px;
+      }
+
+      .bot-icon {
+        width: 70px;
+        height: 70px;
+      }
+
+      .bot-head {
+        width: 60px;
+        height: 60px;
+      }
+
+      .bot-screen {
+        width: 45px;
+        height: 20px;
+      }
+
+      h3 {
+        font-size: 24px;
       }
 
       .input-container {
         flex-direction: column;
-        padding: 12px;
+        padding: 10px;
+        gap: 10px;
       }
 
       .input-container input,
       .input-container button {
         width: 100%;
         padding: 14px;
-        font-size: 15px;
+        font-size: 14px;
         max-width: 100%;
       }
 
-      h3 {
-        font-size: 30px;
-      }
-
       #pair a, #pair font {
-        font-size: 18px;
+        font-size: 16px;
       }
 
       .copy-button {
@@ -502,26 +657,67 @@
   </style>
 </head>
 <body>
+  <!-- Live Tech Background -->
+  <div class="tech-background">
+    <div class="grid-lines"></div>
+    <div class="floating-elements">
+      <div class="floating-element"></div>
+      <div class="floating-element"></div>
+      <div class="floating-element"></div>
+      <div class="floating-element"></div>
+      <div class="data-stream"></div>
+      <div class="data-stream"></div>
+      <div class="data-stream"></div>
+      <div class="data-stream"></div>
+    </div>
+  </div>
+
   <div class="container">
     <div class="box" id="box">
       <div id="text">
-        <i class="fa fa-user"></i>
-        <h3>TOXIC MD PAIRING CODE</h3>
+        <!-- Bot Logo -->
+        <div class="bot-icon">
+          <div class="bot-head">
+            <div class="bot-screen">
+              <div class="screen-content">
+                <div class="screen-line"></div>
+                <div class="screen-dot"></div>
+                <div class="screen-dot"></div>
+                <div class="screen-dot"></div>
+                <div class="screen-dot"></div>
+              </div>
+            </div>
+          </div>
+          <div class="bot-body"></div>
+        </div>
+
+        <h3>TOXIC MD PAIR</h3>
+        <div class="subtitle">Secure Pairing Code Generator</div>
+
         <div class="input-container" id="input-container">
-          <input placeholder="2547xxx" type="tel" id="number" pattern="[0-9]*" placeholder="Enter your Phone Number with Country Code" name="">
-          <button id="submit">Submit</button>
+          <input placeholder="2547xxxxxxx" type="tel" id="number" pattern="[0-9]*" placeholder="Enter WhatsApp Number" name="">
+          <button id="submit">
+            <i class="fas fa-bolt"></i> Generate Code
+          </button>
         </div>
+
         <div class="loader" id="waiting-message">
-          <div class="ball"></div>
-          <div class="ball" style="transform: rotate(72deg) translateX(20px)"></div>
-          <div class="ball" style="transform: rotate(144deg) translateX(20px)"></div>
-          <div class="ball" style="transform: rotate(216deg) translateX(20px)"></div>
-          <div class="ball" style="transform: rotate(288deg) translateX(20px)"></div>
+          <div class="orbital">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+          </div>
         </div>
+
         <main id="pair"></main>
+
+        <div class="bot-message">
+          <i class="fas fa-robot"></i> Secure pairing code will be generated for your WhatsApp number.
+        </div>
       </div>
     </div>
   </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.0.0-alpha.1/axios.min.js"></script>
   <script>
     let a = document.getElementById("pair");
@@ -531,27 +727,39 @@
     let inputContainer = document.getElementById("input-container");
 
     async function Copy(button) {
-      button.classList.add('touched');
       let codeElement = document.getElementById("copy");
       let text = codeElement.innerText.replace('CODE: ', '');
-      await navigator.clipboard.writeText(text);
-      button.classList.add('copied');
-      button.innerHTML = '<i class="fas fa-check"></i> Copied';
-      setTimeout(() => {
-        button.classList.remove('copied');
-        button.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
-      }, 1000);
+      try {
+        await navigator.clipboard.writeText(text);
+        button.classList.add('copied');
+        button.innerHTML = '<i class="fas fa-check"></i> Code Copied!';
+        setTimeout(() => {
+          button.classList.remove('copied');
+          button.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
+        }, 2000);
+      } catch (err) {
+        button.innerHTML = '<i class="fas fa-exclamation"></i> Failed!';
+        setTimeout(() => {
+          button.innerHTML = '<i class="fas fa-copy"></i> Copy Code';
+        }, 2000);
+      }
     }
 
     b.addEventListener("click", async (e) => {
       e.preventDefault();
-      b.classList.add('touched');
+      
+      // Add click effect
+      b.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        b.style.transform = 'scale(1)';
+      }, 150);
+
       if (!c.value) {
-        a.innerHTML = '<a style="color:#c0d0ff;font-weight:bold">Enter your WhatsApp number with Country Code</a><br><br>';
+        a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold"><i class="fas fa-exclamation-circle"></i> Please enter your WhatsApp number</a><br><br>';
       } else {
         const Toxic_Tech = c.value.replace(/[^0-9]/g, "");
         if (Toxic_Tech.length < 11) {
-          a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold">Invalid Number</a><br><br>';
+          a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold"><i class="fas fa-times-circle"></i> Invalid number format</a><br><br>';
         } else {
           let bb = "";
           let bbc = "";
@@ -567,37 +775,80 @@
             }
           });
           c.value = "+" + bb;
-          c.style = "color:white;font-size:16px";
+          c.style = "color:#00ffcc;font-size:16px;font-weight:bold";
+          
+          // Show loading
           waitingMessage.style.display = 'block';
           a.innerHTML = '';
-          let { data } = await axios(`/code?number=${Toxic_Tech}`);
-          waitingMessage.style.display = 'none';
-          let code = data.code || "Service Unavailable";
-          a.innerHTML = `
-            <font id="copy" style="color:#ffffff;font-weight:bold" size="5">CODE: <span style="color:white;font-weight:bold">${code}</span></font>
-            <button class="copy-button" onclick="Copy(this)"><i class="fas fa-copy"></i> Copy Code</button>
-          `;
+          
+          try {
+            // Simulate API call with timeout for demo
+            setTimeout(async () => {
+              try {
+                let { data } = await axios(`/code?number=${Toxic_Tech}`);
+                waitingMessage.style.display = 'none';
+                let code = data.code || "SERVICE_OFFLINE";
+                
+                // Format code display
+                let formattedCode = code.replace(/(.{4})/g, '$1 ').trim();
+                
+                a.innerHTML = `
+                  <font id="copy" style="color:#ffffff;font-weight:bold;font-size:20px">
+                    <i class="fas fa-key"></i> CODE: 
+                    <span style="color:#00ffcc;font-weight:bold;letter-spacing:2px">${formattedCode}</span>
+                  </font>
+                  <button class="copy-button" onclick="Copy(this)">
+                    <i class="fas fa-copy"></i> Copy Code
+                  </button>
+                  <div style="color:#a0b8ff;font-size:12px;margin-top:10px">
+                    <i class="fas fa-clock"></i> Code valid for 5 minutes
+                  </div>
+                `;
+              } catch (error) {
+                waitingMessage.style.display = 'none';
+                a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold"><i class="fas fa-exclamation-triangle"></i> Network error. Please try again.</a><br><br>';
+              }
+            }, 1500);
+            
+          } catch (error) {
+            waitingMessage.style.display = 'none';
+            a.innerHTML = '<a style="color:#ff6b6b;font-weight:bold"><i class="fas fa-exclamation-triangle"></i> Error generating code</a><br><br>';
+          }
         }
       }
     });
 
-    // Add touch feedback for input field
+    // Input focus effects
     c.addEventListener("focus", () => {
-      inputContainer.classList.add('touched');
+      inputContainer.style.borderColor = "rgba(0, 170, 255, 0.7)";
+      inputContainer.style.boxShadow = "0 0 20px rgba(0, 170, 255, 0.2)";
     });
 
     c.addEventListener("blur", () => {
-      inputContainer.classList.remove('touched');
+      inputContainer.style.borderColor = "rgba(0, 170, 255, 0.3)";
+      inputContainer.style.boxShadow = "inset 0 2px 10px rgba(0, 0, 0, 0.3)";
     });
 
-    // Add touch feedback for copy button
-    document.querySelector('.copy-button')?.addEventListener('click', (e) => {
-      e.target.classList.add('touched');
-      setTimeout(() => e.target.classList.remove('touched'), 500);
-    });
-
-    b.addEventListener('mouseup', () => {
-      b.classList.remove('touched');
+    // Initialize with fade-in effect
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.querySelector('.container').style.opacity = 1;
+        
+        // Add floating elements dynamically
+        const floatingElements = document.querySelector('.floating-elements');
+        for (let i = 0; i < 3; i++) {
+          const el = document.createElement('div');
+          el.className = 'floating-element';
+          el.style.cssText = `
+            width: ${Math.random() * 40 + 20}px;
+            height: ${Math.random() * 40 + 20}px;
+            top: ${Math.random() * 100}%;
+            left: ${Math.random() * 100}%;
+            animation-delay: ${Math.random() * -20}s;
+          `;
+          floatingElements.appendChild(el);
+        }
+      });
     });
   </script>
 </body>
