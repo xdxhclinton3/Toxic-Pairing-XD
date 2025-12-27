@@ -1,108 +1,243 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const pino = require('pino');
+const { makeid } = require('./id');
+
 const {
     default: Toxic_Tech,
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
-const fs = require('fs');
-const path = require('path');
-const pino = require('pino');
 
-module.exports = async (context) => {
-    const { client, m, text, prefix } = context;
+const router = express.Router();
+const sessionDir = path.join(__dirname, "temp");
+
+function removeFile(path) {
+    if (fs.existsSync(path)) fs.rmSync(path, { recursive: true, force: true });
+}
+
+router.get('/', async (req, res) => {
+    const id = makeid();
+    const num = (req.query.number || '').replace(/[^0-9]/g, '');
+    const tempDir = path.join(sessionDir, id);
+    let responseSent = false;
+    let sessionCleanedUp = false;
+
+    async function cleanUpSession() {
+        if (!sessionCleanedUp) {
+            try {
+                removeFile(tempDir);
+            } catch (cleanupError) {
+                console.error("Cleanup error:", cleanupError);
+            }
+            sessionCleanedUp = true;
+        }
+    }
+
+    async function startPairing() {
+        try {
+            const { version } = await fetchLatestBaileysVersion();
+            const { state, saveCreds } = await useMultiFileAuthState(tempDir);
+
+            const sock = Toxic_Tech({
+                version,
+                logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
+                printQRInTerminal: false,
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
+                },
+                browser: ["Ubuntu", "Chrome", "125"],
+                syncFullHistory: false,
+                generateHighQualityLinkPreview: true,
+                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+                getMessage: async () => undefined,
+                markOnlineOnConnect: true,
+                connectTimeoutMs: 120000,
+                keepAliveIntervalMs: 30000,
+                emitOwnEvents: true,
+                fireInitQueries: true,
+                defaultQueryTimeoutMs: 60000,
+                transactionOpts: {
+                    maxCommitRetries: 10,
+                    delayBetweenTriesMs: 3000
+                },
+                retryRequestDelayMs: 10000
+            });
+
+            // === Pairing Code Generation ===  
+            if (!sock.authState.creds.registered) {
+                await delay(2000); 
+                const code = await sock.requestPairingCode(num);
+                if (!responseSent && !res.headersSent) {
+                    res.json({ code: code });
+                    responseSent = true;
+                }
+            }
+
+            sock.ev.on('creds.update', saveCreds);
+
+            sock.ev.on('connection.update', async (update) => {
+                const { connection, lastDisconnect } = update;
+
+                if (connection === 'open') {
+                    console.log('✅ Toxic-MD successfully connected to WhatsApp.');
+
+                    try {
+                        await sock.sendMessage(sock.user.id, {
+                            text: `
+
+◈━━━━━━━━━━━◈
+│❒ Hello! 👋 You're now connected to Toxic-MD.
+
+│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+◈━━━━━━━━━━━◈
+`,
+                        });
+                    } catch (msgError) {
+                        console.log("Welcome message skipped, continuing...");
+                    }
+
+                    await delay(15000);
+
+                    const credsPath = path.join(tempDir, "creds.json");
+
+
+                    let sessionData = null;
+                    let attempts = 0;
+                    const maxAttempts = 10;
+
+                    while (attempts < maxAttempts && !sessionData) {
+                        try {
+                            if (fs.existsSync(credsPath)) {
+                                const data = fs.readFileSync(credsPath);
+                                if (data && data.length > 50) {
+                                    sessionData = data;
+                                    break;
+                                }
+                            }
+                            await delay(4000);
+                            attempts++;
+                        } catch (readError) {
+                            console.error("Read attempt error:", readError);
+                            await delay(2000);
+                            attempts++;
+                        }
+                    }
+
+                    if (!sessionData) {
+                        console.error("Failed to read session data");
+                        try {
+                            await sock.sendMessage(sock.user.id, {
+                                text: "Failed to generate session. Please try again."
+                            });
+                        } catch (e) {}
+                        await cleanUpSession();
+                        sock.ws.close();
+                        return;
+                    }
+
+                    const base64 = Buffer.from(sessionData).toString('base64');
+
+                    try {
+                        const sentSession = await sock.sendMessage(sock.user.id, {
+                            text: base64
+                        });
+
+                        const infoMessage = `  
+◈━━━━━━━━━━━◈  
+SESSION CONNECTED
+
+│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+
+│❒ Need help? Reach out to us:
+
+『••• Visit For Help •••』
+
+> Owner:
+https://wa.me/254735342808
+
+> WaGroup:
+https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI
+
+> WaChannel:
+https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19
+
+> Instagram:
+https://www.instagram.com/xh_clinton
+
+> BotRepo:
+https://github.com/xhclintohn/Toxic-MD
+
+│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
+◈━━━━━━━━━━━◈`;
+
+                        await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
+
+                        await delay(2000);
+                        sock.ws.close();
+                        await cleanUpSession();
+
+                    } catch (sendError) {
+                        console.error("Error sending session:", sendError);
+                        await cleanUpSession();
+                        sock.ws.close();
+                    }
+
+                } else if (connection === "close") {
+                    if (lastDisconnect?.error?.output?.statusCode !== 401) {
+                        console.log('⚠️ Connection closed, attempting to reconnect...');
+                        await delay(10000);
+                        startPairing();
+                    } else {
+                        console.log('❌ Connection closed permanently');
+                        await cleanUpSession();
+                    }
+                } else if (connection === "connecting") {
+                    console.log('⏳ Connecting to WhatsApp...');
+                }
+            });
+
+            // Handle errors
+            sock.ev.on('connection.update', (update) => {
+                if (update.qr) {
+                    console.log("QR code received");
+                }
+                if (update.connection === "close") {
+                    console.log("Connection closed event");
+                }
+            });
+
+        } catch (err) {
+            console.error('❌ Error during pairing:', err);
+            await cleanUpSession();
+            if (!responseSent && !res.headersSent) {
+                res.status(500).json({ code: 'Service Unavailable. Please try again.' });
+                responseSent = true;
+            }
+        }
+    }
+
+
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error("Pairing process timeout"));
+        }, 180000);
+    });
 
     try {
-        if (!text) {
-            return await client.sendMessage(m.chat, {
-                text: `📱 *Please provide a number to pair!*\n\nExample:\n*${prefix}pair 254712345678*`
-            }, { quoted: m });
+        await Promise.race([startPairing(), timeoutPromise]);
+    } catch (finalError) {
+        console.error("Final error:", finalError);
+        await cleanUpSession();
+        if (!responseSent && !res.headersSent) {
+            res.status(500).json({ code: "Service Error - Timeout" });
         }
-
-        const number = text.replace(/[^0-9]/g, '');
-        if (number.length < 6 || number.length > 20) {
-            return await client.sendMessage(m.chat, {
-                text: `❌ *Invalid number!* Please enter a valid WhatsApp number (6–20 digits).`
-            }, { quoted: m });
-        }
-
-        await client.sendMessage(m.chat, { react: { text: '⌛', key: m.key } });
-
-        const tempPath = path.join(__dirname, 'temps', number);
-        if (!fs.existsSync(tempPath)) fs.mkdirSync(tempPath, { recursive: true });
-
-        const { version } = await fetchLatestBaileysVersion();
-        const { state, saveCreds } = await useMultiFileAuthState(tempPath);
-
-        const Toxic_MD_Client = Toxic_Tech({
-            version,
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-            },
-            printQRInTerminal: false,
-            logger: pino({ level: 'silent' }),
-            browser: ["Ubuntu", "Chrome", "125"],
-            syncFullHistory: false,
-            generateHighQualityLinkPreview: true,
-            markOnlineOnConnect: true,
-            connectTimeoutMs: 120000,
-            keepAliveIntervalMs: 30000,
-            defaultQueryTimeoutMs: 60000,
-            transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
-            retryRequestDelayMs: 10000
-        });
-
-        Toxic_MD_Client.ev.on('creds.update', saveCreds);
-
-        await delay(2000);
-        const code = await Toxic_MD_Client.requestPairingCode(number);
-
-        if (!code) throw new Error("Failed to generate pairing code.");
-
-        await client.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
-
-        await client.sendMessage(m.chat, {
-            text: `✅ *Pairing Code Generated!*\n\n📱 *For Number:* ${number}\n\n🔐 *Your Pairing Code:*`,
-            templateButtons: [{
-                index: 1,
-                urlButton: {
-                    displayText: `📋 Copy Code: ${code}`,
-                    url: `https://api.whatsapp.com/send/?phone=${number}&text=${encodeURIComponent(code)}&type=phone_number&app_absent=0`
-                }
-            }, {
-                index: 2,
-                urlButton: {
-                    displayText: "📖 How to Use",
-                    url: "https://github.com/xhclintohn/Toxic-MD#pairing-instructions"
-                }
-            }, {
-                index: 3,
-                quickReplyButton: {
-                    displayText: "🔄 Generate Again",
-                    id: `${prefix}pair ${number}`
-                }
-            }],
-            footer: "Toxic-MD Pairing System",
-            viewOnce: true
-        }, { quoted: m });
-
-        await client.sendMessage(m.chat, {
-            text: `📝 *Instructions:*\n\n1. The code above is your *pairing code*\n2. Use it within *3 minutes* on WhatsApp\n3. Open WhatsApp → Settings → Linked Devices → Link a Device\n4. Enter the code: *${code}*\n\n⚠️ *Important:*\n• Code expires in 3 minutes\n• Keep this code private\n• Don't share with anyone\n\n📞 *Need Help?*\n• Owner: https://wa.me/254735342808\n• Group: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI\n• Channel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19\n• Repo: https://github.com/xhclintohn/Toxic-MD\n\nDon't forget to ⭐ the repo!`
-        }, { quoted: m });
-
-        await Toxic_MD_Client.ws.close();
-
-        setTimeout(() => {
-            if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { recursive: true, force: true });
-        }, 5000);
-
-    } catch (error) {
-        console.error("Error in pair command:", error);
-        await client.sendMessage(m.chat, { react: { text: '❌', key: m.key } });
-        await client.sendMessage(m.chat, {
-            text: `⚠️ *Failed to generate pairing code.*\n\nError: ${error.message || "Unknown error"}\n\nTry again later or check your number.\n\n*Possible Issues:*\n1. Number not registered on WhatsApp\n2. Network timeout\n3. WhatsApp server busy\n\n📞 *Support:* https://wa.me/254735342808\n📚 *Docs:* https://github.com/xhclintohn/Toxic-MD`
-        }, { quoted: m });
     }
-};
+});
+
+module.exports = router;
