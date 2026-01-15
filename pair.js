@@ -31,9 +31,7 @@ router.get('/', async (req, res) => {
         if (!sessionCleanedUp) {
             try {
                 removeFile(tempDir);
-            } catch (cleanupError) {
-                console.error("Cleanup error:", cleanupError);
-            }
+            } catch (cleanupError) {}
             sessionCleanedUp = true;
         }
     }
@@ -51,8 +49,8 @@ router.get('/', async (req, res) => {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
                 },
-                browser: ["Ubuntu", "Chrome", "125"],
-                syncFullHistory: false,
+                browser: Browsers.macOS('Desktop'),
+                syncFullHistory: true,
                 generateHighQualityLinkPreview: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
                 getMessage: async () => undefined,
@@ -69,13 +67,20 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
-            // === Pairing Code Generation ===  
-            if (!sock.authState.creds.registered) {
-                await delay(2000); 
-                const code = await sock.requestPairingCode(num);
-                if (!responseSent && !res.headersSent) {
-                    res.json({ code: code });
-                    responseSent = true;
+            if (!state.creds.registered) {
+                await delay(2000);
+                try {
+                    const code = await sock.requestPairingCode(num);
+                    if (!responseSent && !res.headersSent) {
+                        res.json({ code: code });
+                        responseSent = true;
+                    }
+                } catch (pairError) {
+                    if (!responseSent && !res.headersSent) {
+                        res.status(400).json({ error: "Cannot generate pairing code" });
+                        responseSent = true;
+                        return;
+                    }
                 }
             }
 
@@ -85,8 +90,6 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Toxic-MD successfully connected to WhatsApp.');
-
                     try {
                         await sock.sendMessage(sock.user.id, {
                             text: `
@@ -98,18 +101,15 @@ router.get('/', async (req, res) => {
 ◈━━━━━━━━━━━◈
 `,
                         });
-                    } catch (msgError) {
-                        console.log("Welcome message skipped, continuing...");
-                    }
+                    } catch (msgError) {}
 
                     await delay(15000);
 
                     const credsPath = path.join(tempDir, "creds.json");
 
-
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 10;
+                    const maxAttempts = 15;
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
@@ -120,17 +120,15 @@ router.get('/', async (req, res) => {
                                     break;
                                 }
                             }
-                            await delay(4000);
+                            await delay(3000);
                             attempts++;
                         } catch (readError) {
-                            console.error("Read attempt error:", readError);
                             await delay(2000);
                             attempts++;
                         }
                     }
 
                     if (!sessionData) {
-                        console.error("Failed to read session data");
                         try {
                             await sock.sendMessage(sock.user.id, {
                                 text: "Failed to generate session. Please try again."
@@ -183,37 +181,21 @@ https://github.com/xhclintohn/Toxic-MD
                         await cleanUpSession();
 
                     } catch (sendError) {
-                        console.error("Error sending session:", sendError);
                         await cleanUpSession();
                         sock.ws.close();
                     }
 
                 } else if (connection === "close") {
                     if (lastDisconnect?.error?.output?.statusCode !== 401) {
-                        console.log('⚠️ Connection closed, attempting to reconnect...');
                         await delay(10000);
                         startPairing();
                     } else {
-                        console.log('❌ Connection closed permanently');
                         await cleanUpSession();
                     }
-                } else if (connection === "connecting") {
-                    console.log('⏳ Connecting to WhatsApp...');
-                }
-            });
-
-            // Handle errors
-            sock.ev.on('connection.update', (update) => {
-                if (update.qr) {
-                    console.log("QR code received");
-                }
-                if (update.connection === "close") {
-                    console.log("Connection closed event");
                 }
             });
 
         } catch (err) {
-            console.error('❌ Error during pairing:', err);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
                 res.status(500).json({ code: 'Service Unavailable. Please try again.' });
@@ -221,7 +203,6 @@ https://github.com/xhclintohn/Toxic-MD
             }
         }
     }
-
 
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
@@ -232,7 +213,6 @@ https://github.com/xhclintohn/Toxic-MD
     try {
         await Promise.race([startPairing(), timeoutPromise]);
     } catch (finalError) {
-        console.error("Final error:", finalError);
         await cleanUpSession();
         if (!responseSent && !res.headersSent) {
             res.status(500).json({ code: "Service Error - Timeout" });
