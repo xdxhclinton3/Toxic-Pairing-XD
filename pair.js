@@ -5,7 +5,7 @@ const pino = require('pino');
 const { makeid } = require('./id');
 
 const {
-    default: makeWASocket,
+    default: Toxic_Tech,
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
@@ -26,14 +26,10 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
-    let sock = null;
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
             try {
-                if (sock && sock.ws) {
-                    sock.ws.close();
-                }
                 removeFile(tempDir);
             } catch (cleanupError) {}
             sessionCleanedUp = true;
@@ -45,7 +41,7 @@ router.get('/', async (req, res) => {
             const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            sock = makeWASocket({
+            const sock = Toxic_Tech({
                 version,
                 logger: pino({ level: 'silent' }),
                 printQRInTerminal: false,
@@ -55,13 +51,20 @@ router.get('/', async (req, res) => {
                 },
                 browser: Browsers.macOS('Desktop'),
                 syncFullHistory: true,
+                generateHighQualityLinkPreview: true,
+                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+                getMessage: async () => undefined,
                 markOnlineOnConnect: false,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 10000,
+                emitOwnEvents: true,
+                fireInitQueries: false,
+                defaultQueryTimeoutMs: 30000,
+                retryRequestDelayMs: 5000
             });
 
             if (!state.creds.registered) {
-                await delay(3000);
+                await delay(1000);
                 try {
                     const code = await sock.requestPairingCode(num);
                     if (!responseSent && !res.headersSent) {
@@ -70,7 +73,7 @@ router.get('/', async (req, res) => {
                     }
                 } catch (pairError) {
                     if (!responseSent && !res.headersSent) {
-                        res.status(400).json({ error: "Pairing failed. Try QR code instead." });
+                        res.json({ code: "ERROR: Try using QR code instead" });
                         responseSent = true;
                         return;
                     }
@@ -100,13 +103,13 @@ router.get('/', async (req, res) => {
                         });
                     } catch (msgError) {}
 
-                    await delay(8000);
+                    await delay(10000);
 
                     const credsPath = path.join(tempDir, "creds.json");
 
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 30;
+                    const maxAttempts = 20;
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
@@ -117,10 +120,10 @@ router.get('/', async (req, res) => {
                                     break;
                                 }
                             }
-                            await delay(1000);
+                            await delay(2000);
                             attempts++;
                         } catch (readError) {
-                            await delay(1000);
+                            await delay(2000);
                             attempts++;
                         }
                     }
@@ -128,10 +131,11 @@ router.get('/', async (req, res) => {
                     if (!sessionData) {
                         try {
                             await sock.sendMessage(sock.user.id, {
-                                text: "Failed to read session data. Please try again."
+                                text: "Failed to generate session. Please try again."
                             });
                         } catch (e) {}
                         await cleanUpSession();
+                        sock.ws.close();
                         return;
                     }
 
@@ -172,40 +176,54 @@ https://github.com/xhclintohn/Toxic-MD
 
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                        await delay(5000);
+                        await delay(3000);
+                        sock.ws.close();
                         await cleanUpSession();
 
                     } catch (sendError) {
                         await cleanUpSession();
+                        sock.ws.close();
                     }
 
                 } else if (connection === "close") {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     if (statusCode !== 401) {
+                        console.log('⚠️ Connection closed, reconnecting...');
+                        await delay(3000);
                         await cleanUpSession();
-                        if (!responseSent && !res.headersSent) {
-                            res.status(500).json({ error: 'Connection failed. Try again.' });
-                            responseSent = true;
-                        }
+                        startPairing();
+                    } else {
+                        console.log('❌ Connection closed permanently');
+                        await cleanUpSession();
                     }
+                } else if (connection === "connecting") {
+                    console.log('⏳ Connecting to WhatsApp...');
                 }
             });
 
         } catch (err) {
+            console.error('❌ Error:', err.message);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
-                res.status(500).json({ error: 'Service error. Please try again.' });
+                res.status(500).json({ code: 'Service Unavailable. Please try again.' });
                 responseSent = true;
             }
         }
     }
 
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error("Pairing process timeout"));
+        }, 120000);
+    });
+
     try {
-        await startPairing();
+        await Promise.race([startPairing(), timeoutPromise]);
     } catch (finalError) {
+        console.error("Final error:", finalError.message);
         await cleanUpSession();
         if (!responseSent && !res.headersSent) {
-            res.status(500).json({ error: "Timeout" });
+            res.status(500).json({ code: "Service Error - Timeout" });
         }
     }
 });
