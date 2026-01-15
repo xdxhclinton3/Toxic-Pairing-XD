@@ -5,7 +5,7 @@ const pino = require('pino');
 const { makeid } = require('./id');
 
 const {
-    default: Toxic_Tech,
+    default: makeWASocket,
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
@@ -45,34 +45,23 @@ router.get('/', async (req, res) => {
             const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            sock = Toxic_Tech({
+            sock = makeWASocket({
                 version,
-                logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
+                logger: pino({ level: 'silent' }),
                 printQRInTerminal: false,
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
                 },
                 browser: Browsers.macOS('Desktop'),
                 syncFullHistory: true,
-                generateHighQualityLinkPreview: true,
-                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-                getMessage: async () => undefined,
-                markOnlineOnConnect: true,
-                connectTimeoutMs: 120000,
-                keepAliveIntervalMs: 30000,
-                emitOwnEvents: true,
-                fireInitQueries: true,
-                defaultQueryTimeoutMs: 60000,
-                transactionOpts: {
-                    maxCommitRetries: 10,
-                    delayBetweenTriesMs: 3000
-                },
-                retryRequestDelayMs: 10000
+                markOnlineOnConnect: false,
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 10000,
             });
 
             if (!state.creds.registered) {
-                await delay(2000);
+                await delay(3000);
                 try {
                     const code = await sock.requestPairingCode(num);
                     if (!responseSent && !res.headersSent) {
@@ -81,7 +70,7 @@ router.get('/', async (req, res) => {
                     }
                 } catch (pairError) {
                     if (!responseSent && !res.headersSent) {
-                        res.status(400).json({ error: "Cannot generate pairing code" });
+                        res.status(400).json({ error: "Pairing failed. Try QR code instead." });
                         responseSent = true;
                         return;
                     }
@@ -91,14 +80,12 @@ router.get('/', async (req, res) => {
             sock.ev.on('creds.update', saveCreds);
 
             sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect, qr } = update;
-
-                if (qr) {
-                    console.log("QR received, but using pairing code");
-                }
+                const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
                     console.log('✅ Connected to WhatsApp');
+
+                    await delay(3000);
 
                     try {
                         await sock.sendMessage(sock.user.id, {
@@ -113,13 +100,13 @@ router.get('/', async (req, res) => {
                         });
                     } catch (msgError) {}
 
-                    await delay(5000);
+                    await delay(8000);
 
                     const credsPath = path.join(tempDir, "creds.json");
 
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 20;
+                    const maxAttempts = 30;
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
@@ -130,10 +117,10 @@ router.get('/', async (req, res) => {
                                     break;
                                 }
                             }
-                            await delay(2000);
+                            await delay(1000);
                             attempts++;
                         } catch (readError) {
-                            await delay(2000);
+                            await delay(1000);
                             attempts++;
                         }
                     }
@@ -141,7 +128,7 @@ router.get('/', async (req, res) => {
                     if (!sessionData) {
                         try {
                             await sock.sendMessage(sock.user.id, {
-                                text: "Failed to generate session. Please try again."
+                                text: "Failed to read session data. Please try again."
                             });
                         } catch (e) {}
                         await cleanUpSession();
@@ -185,7 +172,7 @@ https://github.com/xhclintohn/Toxic-MD
 
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                        await delay(3000);
+                        await delay(5000);
                         await cleanUpSession();
 
                     } catch (sendError) {
@@ -193,44 +180,32 @@ https://github.com/xhclintohn/Toxic-MD
                     }
 
                 } else if (connection === "close") {
-                    const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401 && 
-                                          lastDisconnect?.error?.message !== 'Connection Closed';
-                    
-                    if (shouldReconnect) {
-                        console.log('⚠️ Reconnecting...');
-                        await delay(5000);
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    if (statusCode !== 401) {
                         await cleanUpSession();
-                        startPairing();
-                    } else {
-                        console.log('❌ Permanent connection close');
-                        await cleanUpSession();
+                        if (!responseSent && !res.headersSent) {
+                            res.status(500).json({ error: 'Connection failed. Try again.' });
+                            responseSent = true;
+                        }
                     }
                 }
             });
 
         } catch (err) {
-            console.error('❌ Error:', err.message);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
-                res.status(500).json({ error: 'Service Unavailable. Please try again.' });
+                res.status(500).json({ error: 'Service error. Please try again.' });
                 responseSent = true;
             }
         }
     }
 
-    const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-            reject(new Error("Pairing process timeout"));
-        }, 180000);
-    });
-
     try {
-        await Promise.race([startPairing(), timeoutPromise]);
+        await startPairing();
     } catch (finalError) {
-        console.error('❌ Timeout:', finalError.message);
         await cleanUpSession();
         if (!responseSent && !res.headersSent) {
-            res.status(500).json({ error: "Service Error - Timeout" });
+            res.status(500).json({ error: "Timeout" });
         }
     }
 });
