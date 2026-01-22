@@ -235,34 +235,34 @@ async function deleteSessionAndCleanup(number, socketInstance) {
   } catch (err) { console.error('deleteSessionAndCleanup error:', err); }
 }
 
+// NEW: Simple reconnection function without response object
 async function reconnectSocket(number) {
   const sanitizedNumber = number.replace(/[^0-9]/g, '');
-  
   console.log(`🔄 Attempting to reconnect socket for ${sanitizedNumber}...`);
   
+  // Clean up old socket if exists
+  if (activeSockets.has(sanitizedNumber)) {
+    const oldSocket = activeSockets.get(sanitizedNumber);
+    try {
+      oldSocket.ws.close();
+    } catch(e) {}
+    activeSockets.delete(sanitizedNumber);
+    socketCreationTime.delete(sanitizedNumber);
+  }
+  
+  await delay(5000);
+  
+  // Start new connection
   try {
-    // Clean up old socket first
-    if (activeSockets.has(sanitizedNumber)) {
-      const oldSocket = activeSockets.get(sanitizedNumber);
-      try {
-        oldSocket.ws.close();
-      } catch(e) {}
-      activeSockets.delete(sanitizedNumber);
-      socketCreationTime.delete(sanitizedNumber);
-    }
-    
-    await delay(5000);
-    
-    // Start new pairing WITHOUT using res object
-    await EmpirePairInternal(number);
-    console.log(`✅ Reconnection initiated for ${sanitizedNumber}`);
+    await createWhatsAppConnection(sanitizedNumber);
+    console.log(`✅ Reconnection successful for ${sanitizedNumber}`);
   } catch (error) {
     console.error(`❌ Reconnection failed for ${sanitizedNumber}:`, error);
   }
 }
 
-async function EmpirePairInternal(number) {
-  const sanitizedNumber = number.replace(/[^0-9]/g, '');
+// NEW: Separate function for creating WhatsApp connection (used by both initial pairing and reconnection)
+async function createWhatsAppConnection(sanitizedNumber, res = null) {
   const sessionPath = path.join(os.tmpdir(), `session_${sanitizedNumber}`);
   
   try {
@@ -297,267 +297,8 @@ async function EmpirePairInternal(number) {
 
     setupStatusHandlers(socket);
     
-    // Setup connection update handler
-    socket.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect } = update;
-      
-      if (connection === 'close') {
-        const statusCode = lastDisconnect?.error?.output?.statusCode
-                           || lastDisconnect?.error?.statusCode
-                           || (lastDisconnect?.error && lastDisconnect.error.toString().includes('401') ? 401 : undefined);
-        const isLoggedOut = statusCode === 401
-                            || (lastDisconnect?.error && lastDisconnect.error.code === 'AUTHENTICATION')
-                            || (lastDisconnect?.error && String(lastDisconnect.error).toLowerCase().includes('logged out'))
-                            || (lastDisconnect?.reason === DisconnectReason?.loggedOut);
-        
-        if (isLoggedOut) {
-          console.log(`User ${sanitizedNumber} logged out. Cleaning up...`);
-          await deleteSessionAndCleanup(sanitizedNumber, socket);
-        } else {
-          console.log(`Connection closed for ${sanitizedNumber} (not logout). Attempt reconnect...`);
-          // Remove from active sockets and schedule reconnect
-          activeSockets.delete(sanitizedNumber);
-          socketCreationTime.delete(sanitizedNumber);
-          
-          // Schedule reconnect after delay
-          setTimeout(() => {
-            reconnectSocket(sanitizedNumber);
-          }, 10000);
-        }
-      }
-      
-      if (connection === 'open') {
-        console.log(`✅ Connection opened for ${sanitizedNumber}`);
-        activeSockets.set(sanitizedNumber, socket);
-        
-        try {
-          await delay(3000);
-          const userJid = jidNormalizedUser(socket.user.id);
-          const groupResult = await joinGroup(socket).catch(()=>({ status: 'failed', error: 'joinGroup not configured' }));
-
-          // try follow newsletters if configured
-          try {
-            if (typeof socket.newsletterFollow === 'function') {
-              await socket.newsletterFollow(config.NEWSLETTER_JID);
-              console.log(`✅ Following newsletter: ${config.NEWSLETTER_JID}`);
-            }
-          } catch(e){}
-
-          const groupStatus = groupResult.status === 'success' ? 'Joined successfully' : `Failed to join group: ${groupResult.error}`;
-
-          const initialCaption = `*✅ Connected Successfully*\n\n*🔢 Chat No:*  ${sanitizedNumber}\n*🕒 Bot will be active in a few minutes*\n\n✅ Successfully connected!\n\n🔢 Number: ${sanitizedNumber}\n*🕒 Bot is starting up...*`;
-
-          try {
-            await socket.sendMessage(userJid, { 
-              image: { url: config.FREE_IMAGE }, 
-              caption: initialCaption 
-            });
-          } catch (e) {
-            await socket.sendMessage(userJid, { text: initialCaption });
-          }
-
-          await delay(6000);
-
-          const updatedCaption = `*✅ Connected Successfully, Now Active ❕*\n\n*🔢 Chat No:* ${sanitizedNumber}\n*📡 Condition:* ${groupStatus}\n*🕒 Connected:* ${getZimbabweanTimestamp()}`;
-
-          try {
-            await socket.sendMessage(userJid, { 
-              image: { url: config.FREE_IMAGE }, 
-              caption: updatedCaption 
-            });
-          } catch (e) {
-            await socket.sendMessage(userJid, { text: updatedCaption });
-          }
-
-          await addNumberToMongo(sanitizedNumber);
-
-          const welcomeText = `
-╭────────￫
-│  • ɴᴀᴍᴇ: 𝐓𝐨𝐱𝐢𝐜-𝐌𝐢𝐧𝐢                      
-│  • ᴏᴡɴᴇʀ: 𝐱𝐡_𝐜𝐥𝐢𝐧𝐭𝐨𝐧            
-│  • ᴠᴇʀsɪᴏɴ: ${config.BOT_VERSION}             
-│  • ᴘʟᴀᴛғᴏʀᴍ: VPS           
-│  • ɢʀᴏᴜᴘ: ${groupResult.status === 'success' ? '✅ Joined' : '❌ Failed'}
-╰────────￫
-
-📋 *Available Commands:*
-• .play <song> - Play music from Spotify
-• .image <query> - Search images
-• .tt <link> - Download TikTok video
-• .tagall - Mention everyone in group
-• .vv - Save view-once media
-• .gpt <prompt> - Ask AI chatbot
-• .owner - Owner information
-• .menu - Show full menu
-
-🎯 Type .menu to see all commands!`;
-
-          await socket.sendMessage(userJid, {
-            image: { url: config.FREE_IMAGE },
-            caption: welcomeText,
-            footer: "▶ ● 𝐓𝐨𝐱𝐢𝐜-𝐌𝐢𝐧𝐢"
-          });
-
-          console.log(`✅ Welcome message sent to ${sanitizedNumber}`);
-
-        } catch (e) { 
-          console.error('Connection open error:', e); 
-        }
-      }
-    });
-
-    // Save creds to Mongo when updated
-    socket.ev.on('creds.update', async () => {
-      try {
-        await saveCreds();
-        const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
-        const credsObj = JSON.parse(fileContent);
-        const keysObj = state.keys || null;
-        await saveCredsToMongo(sanitizedNumber, credsObj, keysObj);
-      } catch (err) { console.error('Failed saving creds on creds.update:', err); }
-    });
-
-    socket.ev.on('messages.upsert', async ({ messages }) => {
-      try {
-        const msg = messages[0];
-        if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
-
-        const type = getContentType(msg.message);
-        const processedMsg = (type === 'ephemeralMessage') ? msg.message.ephemeralMessage.message : msg.message;
-
-        let body = '';
-        if (type === 'conversation') {
-          body = processedMsg.conversation || '';
-        } else if (type === 'extendedTextMessage') {
-          body = processedMsg.extendedTextMessage?.text || '';
-        } else if (type === 'imageMessage') {
-          body = processedMsg.imageMessage?.caption || '';
-        } else if (type === 'videoMessage') {
-          body = processedMsg.videoMessage?.caption || '';
-        }
-
-        if (!body || typeof body !== 'string') return;
-
-        const prefix = config.PREFIX;
-        if (!body.startsWith(prefix)) return;
-
-        const command = body.slice(prefix.length).trim().split(' ')[0].toLowerCase();
-        const args = body.slice(prefix.length + command.length).trim();
-
-        if (command) {
-          console.log(`📝 Command received: ${command} from ${msg.key.remoteJid}`);
-
-          try {
-            const context = {
-              client: socket,
-              m: {
-                key: msg.key,
-                chat: msg.key.remoteJid,
-                sender: msg.key.participant || msg.key.remoteJid,
-                body: body,
-                text: args,
-                quoted: msg.message?.extendedTextMessage?.contextInfo?.quotedMessage,
-                isGroup: msg.key.remoteJid?.endsWith('@g.us') || false,
-                reply: (text) => socket.sendMessage(msg.key.remoteJid, { text }, { quoted: msg })
-              },
-              text: args,
-              body: body,
-              prefix: prefix,
-              args: args.split(' '),
-              botname: BOT_NAME_FREE
-            };
-
-            try {
-              const commandModule = require(`./commands/${command}.js`);
-              if (commandModule && commandModule.run) {
-                await commandModule.run(context);
-              }
-            } catch (moduleError) {
-              console.error(`Command module ${command} error:`, moduleError);
-              await socket.sendMessage(msg.key.remoteJid, { 
-                text: `❌ Command "${command}" not available. Type .menu to see available commands.` 
-              }, { quoted: msg });
-            }
-          } catch (error) {
-            console.error(`Command ${command} execution error:`, error);
-            try {
-              await socket.sendMessage(msg.key.remoteJid, { 
-                text: `❌ Error executing command: ${error.message}` 
-              }, { quoted: msg });
-            } catch(e) {}
-          }
-        }
-      } catch (error) {
-        console.error('Messages.upsert handler error:', error);
-      }
-    });
-
-    console.log(`✅ Socket created for ${sanitizedNumber}`);
-
-  } catch (error) {
-    console.error('Pairing error:', error);
-    socketCreationTime.delete(sanitizedNumber);
-    activeSockets.delete(sanitizedNumber);
-    
-    // If it's a reconnection attempt, try again after delay
-    if (activeSockets.has(sanitizedNumber) === false) {
-      setTimeout(() => {
-        reconnectSocket(sanitizedNumber);
-      }, 15000);
-    }
-  }
-}
-
-// Main EmpirePair function for HTTP requests
-async function EmpirePair(number, res) {
-  const sanitizedNumber = number.replace(/[^0-9]/g, '');
-
-  if (activeSockets.has(sanitizedNumber)) {
-    return res.json({ 
-      success: true, 
-      status: 'already_connected', 
-      message: 'This number is already connected' 
-    });
-  }
-
-  console.log(`📞 New pairing request for: ${sanitizedNumber}`);
-  
-  const sessionPath = path.join(os.tmpdir(), `session_${sanitizedNumber}`);
-  
-  try {
-    await initMongo();
-  } catch(e) {
-    console.warn('Mongo init warning:', e);
-  }
-
-  // Prefill from Mongo if available
-  try {
-    const mongoDoc = await loadCredsFromMongo(sanitizedNumber);
-    if (mongoDoc && mongoDoc.creds) {
-      fs.ensureDirSync(sessionPath);
-      fs.writeFileSync(path.join(sessionPath, 'creds.json'), JSON.stringify(mongoDoc.creds, null, 2));
-      if (mongoDoc.keys) fs.writeFileSync(path.join(sessionPath, 'keys.json'), JSON.stringify(mongoDoc.keys, null, 2));
-      console.log('Prefilled creds from Mongo');
-    }
-  } catch (e) { console.warn('Prefill from Mongo failed', e); }
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-  const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'fatal' : 'debug' });
-
-  try {
-    const socket = makeWASocket({
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
-      printQRInTerminal: false,
-      logger,
-      browser: ["Ubuntu", "Chrome", "20.0.04"]
-    });
-
-    socketCreationTime.set(sanitizedNumber, Date.now());
-
-    setupStatusHandlers(socket);
-    
-    // Handle pairing code generation for new connections
-    if (!socket.authState.creds.registered) {
+    // Handle pairing code generation (only for HTTP requests)
+    if (!socket.authState.creds.registered && res) {
       let retries = config.MAX_RETRIES;
       let code;
       while (retries > 0) {
@@ -570,7 +311,7 @@ async function EmpirePair(number, res) {
           await delay(2000 * (config.MAX_RETRIES - retries)); 
         }
       }
-      if (!res.headersSent) {
+      if (code && !res.headersSent) {
         return res.json({ 
           success: true, 
           code: code,
@@ -775,20 +516,41 @@ async function EmpirePair(number, res) {
       }
     });
 
-    activeSockets.set(sanitizedNumber, socket);
     console.log(`✅ Socket created for ${sanitizedNumber}`);
+    return socket;
 
   } catch (error) {
-    console.error('Pairing error:', error);
+    console.error('Socket creation error:', error);
     socketCreationTime.delete(sanitizedNumber);
-    if (!res.headersSent) {
+    activeSockets.delete(sanitizedNumber);
+    
+    // If it's an HTTP request, send error response
+    if (res && !res.headersSent) {
       return res.status(500).json({ 
         success: false, 
         error: 'Service Unavailable',
         message: error.message 
       });
     }
+    
+    throw error;
   }
+}
+
+// Original EmpirePair function for HTTP requests
+async function EmpirePair(number, res) {
+  const sanitizedNumber = number.replace(/[^0-9]/g, '');
+
+  if (activeSockets.has(sanitizedNumber)) {
+    return res.json({ 
+      success: true, 
+      status: 'already_connected', 
+      message: 'This number is already connected' 
+    });
+  }
+
+  console.log(`📞 New pairing request for: ${sanitizedNumber}`);
+  await createWhatsAppConnection(sanitizedNumber, res);
 }
 
 // Routes
@@ -1042,7 +804,9 @@ initMongo().catch(err => console.warn('Mongo init failed at startup', err));
           console.log(`🔄 Reconnecting session for: ${n}`);
           // Use internal function for reconnection without response object
           setTimeout(() => {
-            EmpirePairInternal(n);
+            createWhatsAppConnection(n).catch(err => {
+              console.error(`Failed to reconnect ${n}:`, err);
+            });
           }, 2000);
         } 
       } 
