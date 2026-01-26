@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
+const zlib = require('zlib');
 const { makeid } = require('./id');
 
 const {
@@ -16,8 +17,8 @@ const {
 const router = express.Router();
 const sessionDir = path.join(__dirname, "temp");
 
-function removeFile(path) {
-    if (fs.existsSync(path)) fs.rmSync(path, { recursive: true, force: true });
+function removeFile(pathToRemove) {
+    if (fs.existsSync(pathToRemove)) fs.rmSync(pathToRemove, { recursive: true, force: true });
 }
 
 router.get('/', async (req, res) => {
@@ -69,9 +70,8 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
-            // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
-                await delay(3000); 
+                await delay(3000);
                 const code = await sock.requestPairingCode(num);
                 if (!responseSent && !res.headersSent) {
                     res.json({ code: code });
@@ -103,43 +103,57 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                
                     await delay(25000);
                     console.log('⏳ Reading session data...');
 
-                    const credsPath = path.join(tempDir, "creds.json");
-
-                    let sessionData = null;
+                    let sessionFiles = null;
                     let attempts = 0;
-                    const maxAttempts = 15; 
+                    const maxAttempts = 15;
 
-                    while (attempts < maxAttempts && !sessionData) {
+                    while (attempts < maxAttempts && !sessionFiles) {
                         try {
-                            if (fs.existsSync(credsPath)) {
-                                const data = fs.readFileSync(credsPath);
-                             
-                                if (data && data.length > 100) { 
-                                    sessionData = data;
-                                    console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
-                                    break;
+                            if (fs.existsSync(tempDir)) {
+                                const files = fs.readdirSync(tempDir).filter(f => f.endsWith('.json'));
+
+                                if (files.length > 0) {
+                                    const collected = {};
+
+                                    for (const file of files) {
+                                        const fullPath = path.join(tempDir, file);
+                                        const data = fs.readFileSync(fullPath, 'utf-8');
+
+                                        if (!data || data.length < 10) {
+                                            console.log(`⚠️ Auth file ${file} is small (${data?.length || 0} bytes), retrying...`);
+                                            sessionFiles = null;
+                                            break;
+                                        }
+
+                                        collected[file] = data;
+                                    }
+
+                                    if (Object.keys(collected).length === files.length) {
+                                        sessionFiles = collected;
+                                        console.log(`✅ Auth files collected: ${files.join(', ')} on attempt ${attempts + 1}`);
+                                        break;
+                                    }
                                 } else {
-                                    console.log(`⚠️ Session file exists but size is small: ${data?.length || 0} bytes`);
+                                    console.log(`⚠️ No auth .json files found yet, attempt ${attempts + 1}/${maxAttempts}`);
                                 }
                             } else {
-                                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                                console.log(`⚠️ Temp dir not found yet, attempt ${attempts + 1}/${maxAttempts}`);
                             }
-                          
+
                             await delay(6000);
                             attempts++;
                         } catch (readError) {
                             console.error("Read attempt error:", readError);
-                            await delay(3000); 
+                            await delay(3000);
                             attempts++;
                         }
                     }
 
-                    if (!sessionData) {
-                        console.error("Failed to read session data after all attempts");
+                    if (!sessionFiles) {
+                        console.error("Failed to read full auth data after all attempts");
                         try {
                             await sock.sendMessage(sock.user.id, {
                                 text: "Failed to generate session. Please try again."
@@ -150,8 +164,16 @@ router.get('/', async (req, res) => {
                         return;
                     }
 
-                    const base64 = Buffer.from(sessionData).toString('base64');
-                    console.log('✅ Session data encoded to base64');
+                    const sessionPayload = {
+                        v: 1,
+                        files: sessionFiles
+                    };
+
+                    const jsonString = JSON.stringify(sessionPayload);
+                    const compressed = zlib.deflateSync(jsonString);
+                    const base64 = compressed.toString('base64');
+
+                    console.log(`✅ Full auth data encoded to base64 (compressed). Length: ${base64.length} characters`);
 
                     try {
                         console.log('📤 Sending session data to user...');
@@ -159,7 +181,6 @@ router.get('/', async (req, res) => {
                             text: base64
                         });
 
-                     
                         await delay(3000);
 
                         const infoMessage = `  
@@ -193,10 +214,9 @@ https://github.com/xhclintohn/Toxic-MD
                         console.log('📤 Sending information message...');
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                       
                         console.log('⏳ Finalizing session...');
                         await delay(5000);
-                        
+
                         console.log('✅ Session completed, closing connection...');
                         sock.ws.close();
                         await cleanUpSession();
@@ -210,7 +230,7 @@ https://github.com/xhclintohn/Toxic-MD
                 } else if (connection === "close") {
                     if (lastDisconnect?.error?.output?.statusCode !== 401) {
                         console.log('⚠️ Connection closed, attempting to reconnect...');
-                        await delay(15000); 
+                        await delay(15000);
                         startPairing();
                     } else {
                         console.log('❌ Connection closed permanently');
@@ -221,7 +241,6 @@ https://github.com/xhclintohn/Toxic-MD
                 }
             });
 
-            // Handle errors
             sock.ev.on('connection.update', (update) => {
                 if (update.qr) {
                     console.log("QR code received");
@@ -241,9 +260,7 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
-
     const timeoutPromise = new Promise((_, reject) => {
-       
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
         }, 300000);
@@ -261,3 +278,4 @@ https://github.com/xhclintohn/Toxic-MD
 });
 
 module.exports = router;
+```0
