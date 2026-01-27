@@ -2,8 +2,8 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
-const zlib = require('zlib');
 const { makeid } = require('./id');
+const PastebinAPI = require('pastebin-js');
 
 const {
     default: Toxic_Tech,
@@ -170,15 +170,27 @@ router.get('/', async (req, res) => {
                     };
 
                     const jsonString = JSON.stringify(sessionPayload);
-                    const compressed = zlib.deflateSync(jsonString);
-                    const base64 = compressed.toString('base64');
 
-                    console.log(`✅ Full auth data encoded to base64 (compressed). Length: ${base64.length} characters`);
+                    let sessionId;
+                    try {
+                        const devKey = process.env.PASTEBIN_API_KEY;
+                        if (!devKey) {
+                            sessionId = Buffer.from(jsonString).toString('base64');
+                        } else {
+                            const pastebin = new PastebinAPI(devKey);
+                            const url = await pastebin.createPaste(jsonString, `Toxic-MD Session ${id}`, null, 1, 'N');
+                            sessionId = url;
+                        }
+                    } catch (e) {
+                        sessionId = Buffer.from(jsonString).toString('base64');
+                    }
+
+                    console.log(`✅ Session ID generated. Length: ${sessionId.length} characters`);
 
                     try {
                         console.log('📤 Sending session data to user...');
                         const sentSession = await sock.sendMessage(sock.user.id, {
-                            text: base64
+                            text: sessionId
                         });
 
                         await delay(3000);
@@ -187,7 +199,7 @@ router.get('/', async (req, res) => {
 ◈━━━━━━━━━━━◈  
 SESSION CONNECTED
 
-│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+│❒ The code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
 
 │❒ Need help? Reach out to us:
 
