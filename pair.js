@@ -16,12 +16,8 @@ const {
 const router = express.Router();
 const sessionDir = path.join(__dirname, "temp");
 
-function removeFile(filePath) {
-    try {
-        if (fs.existsSync(filePath)) fs.rmSync(filePath, { recursive: true, force: true });
-    } catch (e) {
-        console.error("removeFile error:", e.message);
-    }
+function removeFile(path) {
+    if (fs.existsSync(path)) fs.rmSync(path, { recursive: true, force: true });
 }
 
 router.get('/', async (req, res) => {
@@ -30,24 +26,24 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
-    let sock = null;
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
-            sessionCleanedUp = true;
             try {
                 removeFile(tempDir);
             } catch (cleanupError) {
-                console.error("Cleanup error:", cleanupError.message);
+                console.error("Cleanup error:", cleanupError);
             }
+            sessionCleanedUp = true;
         }
     }
 
     async function startPairing() {
         try {
+            const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            sock = Toxic_Tech({
+            const sock = Toxic_Tech({
                 version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
@@ -73,8 +69,9 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
+            // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
-                await delay(3000);
+                await delay(3000); 
                 const code = await sock.requestPairingCode(num);
                 if (!responseSent && !res.headersSent) {
                     res.json({ code: code });
@@ -107,14 +104,14 @@ router.get('/', async (req, res) => {
                     }
 
                 
-                    await delay(10000);
+                    await delay(25000);
                     console.log('⏳ Reading session data...');
 
                     const credsPath = path.join(tempDir, "creds.json");
 
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 10;
+                    const maxAttempts = 15; 
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
@@ -132,7 +129,7 @@ router.get('/', async (req, res) => {
                                 console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
                             }
                           
-                            await delay(5000);
+                            await delay(6000);
                             attempts++;
                         } catch (readError) {
                             console.error("Read attempt error:", readError);
@@ -149,7 +146,7 @@ router.get('/', async (req, res) => {
                             });
                         } catch (e) {}
                         await cleanUpSession();
-                        try { sock.ws.close(); } catch (e) {}
+                        sock.ws.close();
                         return;
                     }
 
@@ -201,20 +198,36 @@ https://github.com/xhclintohn/Toxic-MD
                         await delay(5000);
                         
                         console.log('✅ Session completed, closing connection...');
-                        try { sock.ws.close(); } catch (e) {}
+                        sock.ws.close();
                         await cleanUpSession();
 
                     } catch (sendError) {
                         console.error("Error sending session:", sendError);
                         await cleanUpSession();
-                        try { sock.ws.close(); } catch (e) {}
+                        sock.ws.close();
                     }
 
                 } else if (connection === "close") {
-                    console.log('❌ Connection closed during pairing');
-                    await cleanUpSession();
+                    if (lastDisconnect?.error?.output?.statusCode !== 401) {
+                        console.log('⚠️ Connection closed, attempting to reconnect...');
+                        await delay(15000); 
+                        startPairing();
+                    } else {
+                        console.log('❌ Connection closed permanently');
+                        await cleanUpSession();
+                    }
                 } else if (connection === "connecting") {
                     console.log('⏳ Connecting to WhatsApp...');
+                }
+            });
+
+            // Handle errors
+            sock.ev.on('connection.update', (update) => {
+                if (update.qr) {
+                    console.log("QR code received");
+                }
+                if (update.connection === "close") {
+                    console.log("Connection closed event");
                 }
             });
 
@@ -228,7 +241,9 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
+
     const timeoutPromise = new Promise((_, reject) => {
+       
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
         }, 300000);
@@ -239,9 +254,6 @@ https://github.com/xhclintohn/Toxic-MD
     } catch (finalError) {
         console.error("Final error:", finalError);
         await cleanUpSession();
-        if (sock) {
-            try { sock.ws.close(); } catch (e) {}
-        }
         if (!responseSent && !res.headersSent) {
             res.status(500).json({ code: "Service Error - Timeout" });
         }
