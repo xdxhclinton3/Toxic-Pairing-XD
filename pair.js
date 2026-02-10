@@ -16,8 +16,12 @@ const {
 const router = express.Router();
 const sessionDir = path.join(__dirname, "temp");
 
-function removeFile(path) {
-    if (fs.existsSync(path)) fs.rmSync(path, { recursive: true, force: true });
+function removeFile(filePath) {
+    try {
+        if (fs.existsSync(filePath)) fs.rmSync(filePath, { recursive: true, force: true });
+    } catch (e) {
+        console.error("removeFile error:", e.message);
+    }
 }
 
 router.get('/', async (req, res) => {
@@ -26,15 +30,16 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
+    let sock = null;
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
+            sessionCleanedUp = true;
             try {
                 removeFile(tempDir);
             } catch (cleanupError) {
-                console.error("Cleanup error:", cleanupError);
+                console.error("Cleanup error:", cleanupError.message);
             }
-            sessionCleanedUp = true;
         }
     }
 
@@ -43,8 +48,8 @@ router.get('/', async (req, res) => {
             const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            const sock = Toxic_Tech({
-                version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
+            sock = Toxic_Tech({
+                version,
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
                 auth: {
@@ -53,25 +58,24 @@ router.get('/', async (req, res) => {
                 },
                 browser: ["Ubuntu", 'Chrome', "20.0.04"],
                 syncFullHistory: false,
-                generateHighQualityLinkPreview: true,
+                generateHighQualityLinkPreview: false,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
                 getMessage: async () => undefined,
                 markOnlineOnConnect: true,
-                connectTimeoutMs: 120000,
+                connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
                 emitOwnEvents: true,
                 fireInitQueries: true,
-                defaultQueryTimeoutMs: 60000,
+                defaultQueryTimeoutMs: 30000,
                 transactionOpts: {
-                    maxCommitRetries: 10,
-                    delayBetweenTriesMs: 3000
+                    maxCommitRetries: 5,
+                    delayBetweenTriesMs: 2000
                 },
-                retryRequestDelayMs: 10000
+                retryRequestDelayMs: 5000
             });
 
-            // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
-                await delay(3000); 
+                await delay(2000);
                 const code = await sock.requestPairingCode(num);
                 if (!responseSent && !res.headersSent) {
                     res.json({ code: code });
@@ -85,13 +89,11 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Toxic-MD successfully connected to WhatsApp.');
-                    console.log('⏳ Waiting for session to sync and stabilize...');
+                    console.log('✅ Pairing connected to WhatsApp.');
 
                     try {
                         await sock.sendMessage(sock.user.id, {
                             text: `
-
 ◈━━━━━━━━━━━◈
 │❒ Hello! 👋 You're now connected to Toxic-MD.
 
@@ -103,37 +105,32 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                
-                    await delay(25000);
+                    await delay(5000);
                     console.log('⏳ Reading session data...');
 
                     const credsPath = path.join(tempDir, "creds.json");
 
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 15; 
+                    const maxAttempts = 8;
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
                             if (fs.existsSync(credsPath)) {
                                 const data = fs.readFileSync(credsPath);
-                             
-                                if (data && data.length > 100) { 
+
+                                if (data && data.length > 100) {
                                     sessionData = data;
                                     console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
                                     break;
-                                } else {
-                                    console.log(`⚠️ Session file exists but size is small: ${data?.length || 0} bytes`);
                                 }
-                            } else {
-                                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
                             }
-                          
-                            await delay(6000);
+
+                            await delay(3000);
                             attempts++;
                         } catch (readError) {
-                            console.error("Read attempt error:", readError);
-                            await delay(3000); 
+                            console.error("Read attempt error:", readError.message);
+                            await delay(2000);
                             attempts++;
                         }
                     }
@@ -146,7 +143,7 @@ router.get('/', async (req, res) => {
                             });
                         } catch (e) {}
                         await cleanUpSession();
-                        sock.ws.close();
+                        try { sock.ws.close(); } catch (e) {}
                         return;
                     }
 
@@ -159,8 +156,7 @@ router.get('/', async (req, res) => {
                             text: base64
                         });
 
-                     
-                        await delay(3000);
+                        await delay(2000);
 
                         const infoMessage = `  
 ◈━━━━━━━━━━━◈  
@@ -193,46 +189,29 @@ https://github.com/xhclintohn/Toxic-MD
                         console.log('📤 Sending information message...');
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                       
                         console.log('⏳ Finalizing session...');
-                        await delay(5000);
-                        
+                        await delay(3000);
+
                         console.log('✅ Session completed, closing connection...');
-                        sock.ws.close();
+                        try { sock.ws.close(); } catch (e) {}
                         await cleanUpSession();
 
                     } catch (sendError) {
-                        console.error("Error sending session:", sendError);
+                        console.error("Error sending session:", sendError.message);
                         await cleanUpSession();
-                        sock.ws.close();
+                        try { sock.ws.close(); } catch (e) {}
                     }
 
                 } else if (connection === "close") {
-                    if (lastDisconnect?.error?.output?.statusCode !== 401) {
-                        console.log('⚠️ Connection closed, attempting to reconnect...');
-                        await delay(15000); 
-                        startPairing();
-                    } else {
-                        console.log('❌ Connection closed permanently');
-                        await cleanUpSession();
-                    }
+                    console.log('❌ Connection closed during pairing');
+                    await cleanUpSession();
                 } else if (connection === "connecting") {
                     console.log('⏳ Connecting to WhatsApp...');
                 }
             });
 
-            // Handle errors
-            sock.ev.on('connection.update', (update) => {
-                if (update.qr) {
-                    console.log("QR code received");
-                }
-                if (update.connection === "close") {
-                    console.log("Connection closed event");
-                }
-            });
-
         } catch (err) {
-            console.error('❌ Error during pairing:', err);
+            console.error('❌ Error during pairing:', err.message);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
                 res.status(500).json({ code: 'Service Unavailable. Please try again.' });
@@ -241,19 +220,20 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
-
     const timeoutPromise = new Promise((_, reject) => {
-       
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
-        }, 300000);
+        }, 120000);
     });
 
     try {
         await Promise.race([startPairing(), timeoutPromise]);
     } catch (finalError) {
-        console.error("Final error:", finalError);
+        console.error("Final error:", finalError.message);
         await cleanUpSession();
+        if (sock) {
+            try { sock.ws.close(); } catch (e) {}
+        }
         if (!responseSent && !res.headersSent) {
             res.status(500).json({ code: "Service Error - Timeout" });
         }
