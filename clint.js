@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const __path = process.cwd();
+__path = process.cwd()
 const bodyParser = require("body-parser");
 const PORT = process.env.PORT || 8000;
 const fs = require('fs');
@@ -8,18 +8,16 @@ const path = require('path');
 let server = require('./qr'),
     code = require('./pair');
 require('events').EventEmitter.defaultMaxListeners = 50;
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
 app.use('/qr', server);
 app.use('/code', code);
-app.use('/pair', async (req, res, next) => {
-    res.sendFile(__path + '/pair.html');
-});
-app.use('/', async (req, res, next) => {
-    res.sendFile(__path + '/main.html');
-});
+app.use('/pair',async (req, res, next) => {
+res.sendFile(__path + '/pair.html')
+})
+app.use('/',async (req, res, next) => {
+res.sendFile(__path + '/main.html')
+})
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 const tempDir = path.join(__path, 'temp');
 setInterval(() => {
@@ -40,7 +38,10 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 app.listen(PORT, () => {
-    console.log(`Toxic Pairing Server running on http://localhost:${PORT}`);
-});
+    console.log(`
+xD xD 🚨
 
-module.exports = app;
+ Server running on http://localhost:` + PORT)
+})
+
+module.exports = app

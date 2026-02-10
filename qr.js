@@ -37,12 +37,10 @@ router.get('/', async (req, res) => {
     let qrSent = false;
 
     async function Toxic_MD_QR_CODE() {
-        const { version } = await fetchLatestBaileysVersion();
-        const tempPath = './temp/' + id;
-        const { state, saveCreds } = await useMultiFileAuthState(tempPath);
+        const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
         try {
             qrSock = Toxic_Tech({
-                version,
+                version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }).child({ level: 'silent' })),
@@ -52,8 +50,7 @@ router.get('/', async (req, res) => {
                 browser: ['Ubuntu', 'Chrome', '20.0.04'],
                 syncFullHistory: false,
                 connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000,
-                defaultQueryTimeoutMs: 30000
+                keepAliveIntervalMs: 30000
             });
 
             qrSock.ev.on('creds.update', saveCreds);
@@ -78,37 +75,13 @@ router.get('/', async (req, res) => {
 ` });
                     } catch (e) {}
 
-                    await delay(3000);
-
-                    let data = null;
-                    const credsFile = path.join(__dirname, 'temp', id, 'creds.json');
-                    let readAttempts = 0;
-                    while (readAttempts < 5 && !data) {
-                        try {
-                            if (fs.existsSync(credsFile)) {
-                                const fileData = fs.readFileSync(credsFile);
-                                if (fileData && fileData.length > 100) {
-                                    data = fileData;
-                                    break;
-                                }
-                            }
-                        } catch (e) {}
-                        await delay(2000);
-                        readAttempts++;
-                    }
-
-                    if (!data) {
-                        console.error("Failed to read session creds for QR pairing");
-                        try { qrSock.ws.close(); } catch (e) {}
-                        removeFile(tempPath);
-                        return;
-                    }
-
+                    await delay(5000);
+                    let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
+                    await delay(8000);
                     let b64data = Buffer.from(data).toString('base64');
-                    try {
-                        let session = await qrSock.sendMessage(qrSock.user.id, { text: '' + b64data });
+                    let session = await qrSock.sendMessage(qrSock.user.id, { text: '' + b64data });
 
-                        let Toxic_MD_TEXT = `
+                    let Toxic_MD_TEXT = `
            ◈━━━━━━◈
       SESSION CONNECTED
       
@@ -135,24 +108,21 @@ router.get('/', async (req, res) => {
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`;
 
-                        await qrSock.sendMessage(qrSock.user.id, { text: Toxic_MD_TEXT }, { quoted: session });
-                    } catch (e) {
-                        console.error("Error sending session via QR:", e.message);
-                    }
+                    await qrSock.sendMessage(qrSock.user.id, { text: Toxic_MD_TEXT }, { quoted: session });
 
-                    await delay(2000);
-                    try { qrSock.ws.close(); } catch (e) {}
-                    removeFile(tempPath);
+                    await delay(100);
+                    await qrSock.ws.close();
+                    return await removeFile('./temp/' + id);
                 } else if (connection === 'close') {
                     console.log('QR pairing connection closed');
-                    removeFile(tempPath);
+                    removeFile('./temp/' + id);
                 }
             });
         } catch (err) {
-            console.log('QR service error:', err.message);
-            removeFile('./temp/' + id);
+            console.log('Service restarted due to error:', err);
+            await removeFile('./temp/' + id);
             if (!res.headersSent) {
-                res.json({ code: 'Service is Currently Unavailable' });
+                await res.json({ code: 'Service is Currently Unavailable' });
             }
         }
     }
