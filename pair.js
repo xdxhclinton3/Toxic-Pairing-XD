@@ -40,36 +40,29 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
-            const { version } = await fetchLatestBaileysVersion();
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
-                logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
+                logger: pino({ level: "silent" }),
                 printQRInTerminal: false,
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "silent", stream: 'store' }))
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }))
                 },
-                browser: ["Ubuntu", 'Chrome', "20.0.04"],
-                syncFullHistory: false,
-                generateHighQualityLinkPreview: true,
-                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-                getMessage: async () => undefined,
-                markOnlineOnConnect: true,
-                connectTimeoutMs: 120000,
-                keepAliveIntervalMs: 30000,
+                version: [2, 3000, 1033105955],
+                connectTimeoutMs: 60000,
+                defaultQueryTimeoutMs: 0,
+                keepAliveIntervalMs: 10000,
                 emitOwnEvents: true,
                 fireInitQueries: true,
-                defaultQueryTimeoutMs: 60000,
-                transactionOpts: {
-                    maxCommitRetries: 10,
-                    delayBetweenTriesMs: 3000
-                },
-                retryRequestDelayMs: 10000
+                generateHighQualityLinkPreview: true,
+                syncFullHistory: true,
+                markOnlineOnConnect: true,
+                browser: ['Mac OS', 'Safari', '10.15.7'],
+                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+                getMessage: async () => undefined
             });
 
-            // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
                 await delay(3000); 
                 const code = await sock.requestPairingCode(num);
@@ -103,7 +96,6 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                
                     await delay(25000);
                     console.log('⏳ Reading session data...');
 
@@ -117,7 +109,7 @@ router.get('/', async (req, res) => {
                         try {
                             if (fs.existsSync(credsPath)) {
                                 const data = fs.readFileSync(credsPath);
-                             
+
                                 if (data && data.length > 100) { 
                                     sessionData = data;
                                     console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
@@ -128,7 +120,7 @@ router.get('/', async (req, res) => {
                             } else {
                                 console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
                             }
-                          
+
                             await delay(6000);
                             attempts++;
                         } catch (readError) {
@@ -159,7 +151,6 @@ router.get('/', async (req, res) => {
                             text: base64
                         });
 
-                     
                         await delay(3000);
 
                         const infoMessage = `  
@@ -193,10 +184,9 @@ https://github.com/xhclintohn/Toxic-MD
                         console.log('📤 Sending information message...');
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                       
                         console.log('⏳ Finalizing session...');
                         await delay(5000);
-                        
+
                         console.log('✅ Session completed, closing connection...');
                         sock.ws.close();
                         await cleanUpSession();
@@ -221,7 +211,6 @@ https://github.com/xhclintohn/Toxic-MD
                 }
             });
 
-            // Handle errors
             sock.ev.on('connection.update', (update) => {
                 if (update.qr) {
                     console.log("QR code received");
@@ -241,9 +230,7 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
-
     const timeoutPromise = new Promise((_, reject) => {
-       
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
         }, 300000);
