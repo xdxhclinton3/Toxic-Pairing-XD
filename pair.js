@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
                 generateHighQualityLinkPreview: true,
                 syncFullHistory: true,
                 markOnlineOnConnect: true,
-                browser: ['Mac OS', 'Safari', '10.15.7'],
+                browser: ["Ubuntu", "Chrome", "20.0.04"],
                 auth: { 
                     creds: state.creds, 
                     keys: makeCacheableSignalKeyStore(state.keys, pino().child({ 
