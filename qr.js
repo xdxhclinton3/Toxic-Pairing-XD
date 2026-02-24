@@ -29,19 +29,21 @@ const { readFile } = require('node:fs/promises');
 
 router.get('/', async (req, res) => {
     const id = makeid();
+    let responseSent = false;
+    
     async function Toxic_MD_QR_CODE() {
-        const { version, isLatest } = await fetchLatestBaileysVersion();
-        const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
         try {
+            const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
+            
             let Qr_Code_By_Toxic_Tech = Toxic_Tech({
-                version: [2, 3000, 1033105955],
+                version: [2,3000,1033105955],
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }).child({ level: 'silent' })),
                 },
                 printQRInTerminal: false,
                 logger: pino({ level: 'silent' }).child({ level: 'silent' }),
-                browser: Browsers.ubuntu('Chrome'),
+                browser: ["Ubuntu", "Chrome", "20.0.04"],
                 syncFullHistory: false,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
@@ -50,24 +52,41 @@ router.get('/', async (req, res) => {
             });
 
             Qr_Code_By_Toxic_Tech.ev.on('creds.update', saveCreds);
+            
             Qr_Code_By_Toxic_Tech.ev.on('connection.update', async (s) => {
-                const { connection, lastDisconnect, qr } = s;
-                if (qr) await res.end(await QRCode.toBuffer(qr));
-                if (connection === 'open') {
-                    await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { text: `
+                try {
+                    const { connection, lastDisconnect, qr } = s;
+                    
+                    if (qr && !responseSent && !res.headersSent) {
+                        await res.end(await QRCode.toBuffer(qr));
+                        responseSent = true;
+                    }
+                    
+                    if (connection === 'open') {
+                        console.log(`✅ QR Code connected for session ${id}`);
+                        
+                        await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: `
 ◈━━━━━━━━━━━◈
 │❒ Hello! 👋 You're now connected to Toxic-MD.
 
 │❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
 ◈━━━━━━━━━━━◈
-` });
-                    await delay(5000);
-                    let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                    await delay(8000);
-                    let b64data = Buffer.from(data).toString('base64');
-                    let session = await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { text: '' + b64data });
+` 
+                        });
+                        
+                        await delay(5000);
+                        
+                        let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
+                        
+                        await delay(8000);
+                        
+                        let b64data = Buffer.from(data).toString('base64');
+                        let session = await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: '' + b64data 
+                        });
 
-                    let Toxic_MD_TEXT = `
+                        let Toxic_MD_TEXT = `
            ◈━━━━━━◈
       SESSION CONNECTED
       
@@ -94,24 +113,43 @@ router.get('/', async (req, res) => {
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`;
 
-                    await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { text: Toxic_MD_TEXT }, { quoted: session });
+                        await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: Toxic_MD_TEXT 
+                        }, { 
+                            quoted: session 
+                        });
 
-                    await delay(100);
-                    await Qr_Code_By_Toxic_Tech.ws.close();
-                    return await removeFile('./temp/' + id);
-                } else if (connection === 'close' && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    await delay(5000); 
-                    Toxic_MD_QR_CODE();
+                        await delay(1000);
+                        await Qr_Code_By_Toxic_Tech.ws.close();
+                        await removeFile('./temp/' + id);
+                        
+                    } else if (connection === 'close') {
+                        const statusCode = lastDisconnect?.error?.output?.statusCode;
+                        
+                        if (statusCode === 401) {
+                            console.log(`⚠️ Logged out for session ${id}`);
+                            await removeFile('./temp/' + id);
+                        } else if (statusCode !== 401) {
+                            console.log(`🔄 Reconnecting session ${id}...`);
+                            await delay(5000);
+                            Toxic_MD_QR_CODE();
+                        }
+                    }
+                } catch (err) {
+                    console.log(`❌ Connection update error: ${err.message}`);
                 }
             });
         } catch (err) {
-            console.log('Service restarted due to error:', err);
+            console.log('❌ Service error:', err.message);
             await removeFile('./temp/' + id);
             if (!res.headersSent) {
-                await res.json({ code: 'Service is Currently Unavailable' });
+                await res.status(500).json({ 
+                    code: 'Service is Currently Unavailable. Please try again.' 
+                });
             }
         }
     }
+    
     return await Toxic_MD_QR_CODE();
 });
 
