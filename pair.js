@@ -9,7 +9,6 @@ const {
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
-    Browsers,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -25,6 +24,7 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
+    let store = { loadMessage: async () => undefined };
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
@@ -42,14 +42,9 @@ router.get('/', async (req, res) => {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version: [2, 3000, 1033105955],
                 logger: pino({ level: "silent" }),
                 printQRInTerminal: false,
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }))
-                },
-                browser: ["Ubuntu", "Chrome", "20.0.04"],
+                version: [2, 3000, 1033105955],
                 connectTimeoutMs: 60000,
                 defaultQueryTimeoutMs: 0,
                 keepAliveIntervalMs: 10000,
@@ -58,8 +53,39 @@ router.get('/', async (req, res) => {
                 generateHighQualityLinkPreview: true,
                 syncFullHistory: true,
                 markOnlineOnConnect: true,
-                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-                getMessage: async () => undefined
+                browser: ['Mac OS', 'Safari', '10.15.7'],
+                auth: { 
+                    creds: state.creds, 
+                    keys: makeCacheableSignalKeyStore(state.keys, pino().child({ 
+                        level: 'silent', 
+                        stream: 'store' 
+                    })), 
+                },
+                getMessage: async key => {
+                    const messageData = await store.loadMessage(key.remoteJid, key.id);
+                    return messageData?.message || undefined;
+                },
+                patchMessageBeforeSending: (message) => {
+                    const requiresPatch = !!(
+                        message.buttonsMessage 
+                        || message.templateMessage
+                        || message.listMessage
+                    );
+                    if (requiresPatch) {
+                        message = {
+                            viewOnceMessage: {
+                                message: {
+                                    messageContextInfo: {
+                                        deviceListMetadataVersion: 2,
+                                        deviceListMetadata: {},
+                                    },
+                                    ...message,
+                                },
+                            },
+                        };
+                    }
+                    return message;
+                }
             });
 
             if (!sock.authState.creds.registered) {
