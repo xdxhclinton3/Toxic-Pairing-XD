@@ -10,7 +10,6 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -43,13 +42,14 @@ router.get('/', async (req, res) => {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
+                version: [2, 3000, 1033105955],
                 logger: pino({ level: "silent" }),
                 printQRInTerminal: false,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }))
                 },
-                version: [2, 3000, 1033105955],
+                browser: ["Ubuntu", "Chrome", "20.0.04"],
                 connectTimeoutMs: 60000,
                 defaultQueryTimeoutMs: 0,
                 keepAliveIntervalMs: 10000,
@@ -58,7 +58,6 @@ router.get('/', async (req, res) => {
                 generateHighQualityLinkPreview: true,
                 syncFullHistory: true,
                 markOnlineOnConnect: true,
-                browser: ['Mac OS', 'Safari', '10.15.7'],
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
                 getMessage: async () => undefined
             });
