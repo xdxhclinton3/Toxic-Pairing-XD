@@ -30,20 +30,20 @@ const { readFile } = require('node:fs/promises');
 router.get('/', async (req, res) => {
     const id = makeid();
     let responseSent = false;
-    
+
     async function Toxic_MD_QR_CODE() {
         try {
             const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
-            
+
             let Qr_Code_By_Toxic_Tech = Toxic_Tech({
-                version: [2,3000,1033105955],
+                version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }).child({ level: 'silent' })),
                 },
                 printQRInTerminal: false,
                 logger: pino({ level: 'silent' }).child({ level: 'silent' }),
-                browser: ["Ubuntu", "Chrome", "20.0.04"],
+                browser: Browsers("Chrome"),
                 syncFullHistory: false,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
@@ -52,19 +52,19 @@ router.get('/', async (req, res) => {
             });
 
             Qr_Code_By_Toxic_Tech.ev.on('creds.update', saveCreds);
-            
+
             Qr_Code_By_Toxic_Tech.ev.on('connection.update', async (s) => {
                 try {
                     const { connection, lastDisconnect, qr } = s;
-                    
+
                     if (qr && !responseSent && !res.headersSent) {
                         await res.end(await QRCode.toBuffer(qr));
                         responseSent = true;
                     }
-                    
+
                     if (connection === 'open') {
                         console.log(`✅ QR Code connected for session ${id}`);
-                        
+
                         await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
                             text: `
 ◈━━━━━━━━━━━◈
@@ -74,13 +74,13 @@ router.get('/', async (req, res) => {
 ◈━━━━━━━━━━━◈
 ` 
                         });
-                        
+
                         await delay(5000);
-                        
+
                         let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                        
+
                         await delay(8000);
-                        
+
                         let b64data = Buffer.from(data).toString('base64');
                         let session = await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
                             text: '' + b64data 
@@ -122,10 +122,10 @@ router.get('/', async (req, res) => {
                         await delay(1000);
                         await Qr_Code_By_Toxic_Tech.ws.close();
                         await removeFile('./temp/' + id);
-                        
+
                     } else if (connection === 'close') {
                         const statusCode = lastDisconnect?.error?.output?.statusCode;
-                        
+
                         if (statusCode === 401) {
                             console.log(`⚠️ Logged out for session ${id}`);
                             await removeFile('./temp/' + id);
@@ -149,7 +149,7 @@ router.get('/', async (req, res) => {
             }
         }
     }
-    
+
     return await Toxic_MD_QR_CODE();
 });
 
