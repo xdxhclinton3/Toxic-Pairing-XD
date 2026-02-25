@@ -25,6 +25,7 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
+    let pairingCodeSent = false;
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
@@ -38,7 +39,7 @@ router.get('/', async (req, res) => {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version: [2, 3000, 1027934701],
+                version: (await (await fetch('https://raw.githubusercontent.com/xhclintohn/Baileys/main/lib/Defaults/baileys-version.json')).json()).version,
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
                 auth: {
@@ -62,19 +63,28 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
-            if (!sock.authState.creds.registered) {
-                await delay(3000);
-                const code = await sock.requestPairingCode(num);
-                if (!responseSent && !res.headersSent) {
-                    res.json({ code });
-                    responseSent = true;
-                }
-            }
-
             sock.ev.on('creds.update', saveCreds);
 
             sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect } = update;
+                const { connection, lastDisconnect, qr } = update;
+
+                if (qr && !pairingCodeSent && !sock.authState.creds.registered) {
+                    pairingCodeSent = true;
+                    try {
+                        await delay(1500);
+                        const code = await sock.requestPairingCode(num);
+                        if (!responseSent && !res.headersSent) {
+                            res.json({ code });
+                            responseSent = true;
+                        }
+                    } catch (codeErr) {
+                        console.error('❌ Failed to get pairing code:', codeErr);
+                        if (!responseSent && !res.headersSent) {
+                            res.status(500).json({ code: 'Failed to generate code. Please try again.' });
+                            responseSent = true;
+                        }
+                    }
+                }
 
                 if (connection === 'open') {
                     console.log('✅ Toxic-MD connected to WhatsApp.');
