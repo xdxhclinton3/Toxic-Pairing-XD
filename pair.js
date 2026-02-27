@@ -4,11 +4,11 @@ const path = require('path');
 const pino = require('pino');
 const { makeid } = require('./id');
 
-// Using the GitHub fork - keep as @whiskeysockets/baileys in require
 const {
     default: Toxic_Tech,
     useMultiFileAuthState,
     delay,
+    makeCacheableSignalKeyStore,
     Browsers,
 } = require('@whiskeysockets/baileys');
 
@@ -25,8 +25,8 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
+    let pairingCodeSent = false;
 
-    // Validate phone number
     if (!num) {
         return res.status(400).json({ error: 'Phone number is required' });
     }
@@ -42,41 +42,43 @@ router.get('/', async (req, res) => {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            // FIXED: According to official Itsukichan docs
+            // FIXED: Your version fetch method with correct branch (main not master)
+            const versionResponse = await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/main/src/Defaults/baileys-version.json');
+            const versionData = await versionResponse.json();
+            
             const sock = Toxic_Tech({
-                auth: state,
+                version: versionData.version, // Your preferred method
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+                },
                 logger: pino({ level: 'silent' }),
-                printQRInTerminal: false, // MUST be false for pairing code
-                browser: Browsers.macOS('Desktop'), // Better for session
-                syncFullHistory: true, // Get full history
+                printQRInTerminal: false,
+                browser: Browsers.windows('Desktop'),
+                syncFullHistory: false,
                 markOnlineOnConnect: true,
-                patchMessageBeforeSending: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+                patchMessageBeforeSending: true,
             });
 
             sock.ev.on('creds.update', saveCreds);
 
-            // Wait for socket to initialize
             await delay(2000);
 
-            // Check if already registered
-            if (!sock.authState.creds.registered) {
+            if (!sock.authState?.creds?.registered) {
                 try {
-                    console.log(`📱 Requesting pairing code for: ${num}`);
-                    
-                    // FIXED: Exactly as docs show - just the number
+                    console.log(`Requesting code for: ${num}`);
                     const code = await sock.requestPairingCode(num);
                     
-                    console.log(`✅ Pairing code generated: ${code}`);
-                    
                     if (!responseSent && !res.headersSent) {
-                        res.json({ code: code });
+                        res.json({ code });
                         responseSent = true;
+                        pairingCodeSent = true;
                     }
                 } catch (codeErr) {
-                    console.error('❌ Failed to get pairing code:', codeErr);
+                    console.error('❌ Failed:', codeErr);
                     if (!responseSent && !res.headersSent) {
-                        res.status(500).json({ error: 'Failed to generate code. Please try again.' });
+                        res.status(500).json({ error: 'Failed to generate code' });
                         responseSent = true;
                     }
                     await cleanUpSession();
@@ -84,54 +86,33 @@ router.get('/', async (req, res) => {
                 }
             }
 
-            // Handle connection updates
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Successfully connected to WhatsApp!');
+                    console.log('✅ Connected!');
                     
-                    // Wait for session to be fully saved
-                    await delay(10000);
-
-                    // Read session file
+                    await delay(15000);
+                    
                     const credsPath = path.join(tempDir, "creds.json");
-                    
                     if (fs.existsSync(credsPath)) {
                         const sessionData = fs.readFileSync(credsPath);
                         const base64 = Buffer.from(sessionData).toString('base64');
                         
                         try {
-                            // Send session to user
-                            await sock.sendMessage(sock.user.id, { 
-                                text: `✅ *Your Session ID:*\n\n${base64}` 
-                            });
-                            
+                            await sock.sendMessage(sock.user.id, { text: base64 });
                             await delay(2000);
                             
-                            // Send info message
                             await sock.sendMessage(sock.user.id, {
-                                text: `◈━━━━━━━━━━━◈\n✅ *SESSION CONNECTED*\n\n│❒ Copy the session ID above 🔐\n\n│❒ Support:\n> Owner: wa.me/254735342808\n> Repo: github.com/xhclintohn/Toxic-MD\n◈━━━━━━━━━━━◈`
+                                text: `◈━━━━━━━━━━━◈\n✅ SESSION CONNECTED\n\nSupport: wa.me/254735342808\n◈━━━━━━━━━━━◈`
                             });
                             
-                        } catch (e) {
-                            console.error("Error sending messages:", e);
-                        }
+                        } catch (e) {}
                     }
                     
-                    // Close connection after sending
                     await delay(5000);
                     sock.end();
                     await cleanUpSession();
-                    
-                } else if (connection === 'close') {
-                    const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    if (statusCode !== 401) {
-                        console.log('Connection closed, reconnecting...');
-                    } else {
-                        console.log('Logged out');
-                        await cleanUpSession();
-                    }
                 }
             });
 
@@ -139,16 +120,14 @@ router.get('/', async (req, res) => {
             console.error('❌ Error:', err);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
-                res.status(500).json({ error: 'Service Unavailable' });
+                res.status(500).json({ error: 'Service Error' });
                 responseSent = true;
             }
         }
     }
 
-    // Start the process
     startPairing();
-
-    // Timeout
+    
     setTimeout(async () => {
         if (!responseSent && !res.headersSent) {
             res.status(408).json({ error: "Timeout" });
@@ -156,7 +135,6 @@ router.get('/', async (req, res) => {
         }
         await cleanUpSession();
     }, 60000);
-
 });
 
 module.exports = router;
