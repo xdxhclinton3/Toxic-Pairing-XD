@@ -25,7 +25,6 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
-    let pairingCodeSent = false;
 
     if (!num) {
         return res.status(400).json({ error: 'Phone number is required' });
@@ -42,12 +41,9 @@ router.get('/', async (req, res) => {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            // FIXED: Your version fetch method with correct branch (main not master)
-            const versionResponse = await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/main/src/Defaults/baileys-version.json');
-            const versionData = await versionResponse.json();
-            
+            // USING THE LATEST VERSION
             const sock = Toxic_Tech({
-                version: versionData.version, // Your preferred method
+                version: [2, 3000, 1033105955], // Latest version that works!
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -67,13 +63,12 @@ router.get('/', async (req, res) => {
 
             if (!sock.authState?.creds?.registered) {
                 try {
-                    console.log(`Requesting code for: ${num}`);
+                    console.log(`📱 Requesting code for: ${num}`);
                     const code = await sock.requestPairingCode(num);
                     
                     if (!responseSent && !res.headersSent) {
                         res.json({ code });
                         responseSent = true;
-                        pairingCodeSent = true;
                     }
                 } catch (codeErr) {
                     console.error('❌ Failed:', codeErr);
@@ -90,7 +85,7 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Connected!');
+                    console.log('✅ Connected to WhatsApp!');
                     
                     await delay(15000);
                     
@@ -107,12 +102,21 @@ router.get('/', async (req, res) => {
                                 text: `◈━━━━━━━━━━━◈\n✅ SESSION CONNECTED\n\nSupport: wa.me/254735342808\n◈━━━━━━━━━━━◈`
                             });
                             
-                        } catch (e) {}
+                        } catch (e) {
+                            console.error("Send error:", e);
+                        }
                     }
                     
                     await delay(5000);
                     sock.end();
                     await cleanUpSession();
+                } else if (connection === 'close') {
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    if (statusCode !== 401) {
+                        console.log('Connection closed, reconnecting...');
+                    } else {
+                        await cleanUpSession();
+                    }
                 }
             });
 
