@@ -41,9 +41,8 @@ router.get('/', async (req, res) => {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            // USING THE LATEST VERSION
             const sock = Toxic_Tech({
-                version: [2, 3000, 1033105955], // Latest version that works!
+                version: [2, 3000, 1033105955],
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -63,7 +62,7 @@ router.get('/', async (req, res) => {
 
             if (!sock.authState?.creds?.registered) {
                 try {
-                    console.log(`📱 Requesting code for: ${num}`);
+                    console.log(`Requesting code for: ${num}`);
                     const code = await sock.requestPairingCode(num);
                     
                     if (!responseSent && !res.headersSent) {
@@ -71,7 +70,7 @@ router.get('/', async (req, res) => {
                         responseSent = true;
                     }
                 } catch (codeErr) {
-                    console.error('❌ Failed:', codeErr);
+                    console.error('Failed:', codeErr);
                     if (!responseSent && !res.headersSent) {
                         res.status(500).json({ error: 'Failed to generate code' });
                         responseSent = true;
@@ -85,7 +84,7 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Connected to WhatsApp!');
+                    console.log('Connected to WhatsApp!');
                     
                     await delay(15000);
                     
@@ -121,7 +120,7 @@ router.get('/', async (req, res) => {
             });
 
         } catch (err) {
-            console.error('❌ Error:', err);
+            console.error('Error:', err);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
                 res.status(500).json({ error: 'Service Error' });
