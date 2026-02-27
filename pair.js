@@ -11,7 +11,7 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-} = require('@itsukichan/baileys');
+} = require('@whiskeysockets/baileys');
 
 const router = express.Router();
 const sessionDir = path.join(__dirname, "temp");
