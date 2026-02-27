@@ -25,7 +25,6 @@ router.get('/', async (req, res) => {
     const tempDir = path.join(sessionDir, id);
     let responseSent = false;
     let sessionCleanedUp = false;
-    let pairingCodeSent = false;
 
     // Validate phone number
     if (!num) {
@@ -43,33 +42,36 @@ router.get('/', async (req, res) => {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            // FIXED: Removed version fetching - let the package handle it
+            // FIXED: According to official Itsukichan docs
             const sock = Toxic_Tech({
                 auth: state,
                 logger: pino({ level: 'silent' }),
-                printQRInTerminal: false,
-                browser: Browsers.windows('Desktop'),
-                syncFullHistory: false,
+                printQRInTerminal: false, // MUST be false for pairing code
+                browser: Browsers.macOS('Desktop'), // Better for session
+                syncFullHistory: true, // Get full history
                 markOnlineOnConnect: true,
+                patchMessageBeforeSending: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-                patchMessageBeforeSending: true, // Itsukichann feature
             });
 
             sock.ev.on('creds.update', saveCreds);
 
-            // Wait for socket to be ready
-            await delay(3000);
+            // Wait for socket to initialize
+            await delay(2000);
 
-            // Request pairing code
-            if (!sock.authState?.creds?.registered) {
+            // Check if already registered
+            if (!sock.authState.creds.registered) {
                 try {
-                    // Itsukichann fork expects just the number
+                    console.log(`📱 Requesting pairing code for: ${num}`);
+                    
+                    // FIXED: Exactly as docs show - just the number
                     const code = await sock.requestPairingCode(num);
+                    
+                    console.log(`✅ Pairing code generated: ${code}`);
                     
                     if (!responseSent && !res.headersSent) {
                         res.json({ code: code });
                         responseSent = true;
-                        pairingCodeSent = true;
                     }
                 } catch (codeErr) {
                     console.error('❌ Failed to get pairing code:', codeErr);
@@ -82,146 +84,79 @@ router.get('/', async (req, res) => {
                 }
             }
 
+            // Handle connection updates
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect } = update;
 
                 if (connection === 'open') {
-                    console.log('✅ Toxic-MD connected to WhatsApp.');
+                    console.log('✅ Successfully connected to WhatsApp!');
+                    
+                    // Wait for session to be fully saved
+                    await delay(10000);
 
-                    try {
-                        // Send welcome message
-                        await sock.sendMessage(sock.user.id, {
-                            text: `◈━━━━━━━━━━━◈\n│❒ Hello! 👋 You're now connected to Toxic-MD.\n\n│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂\n◈━━━━━━━━━━━◈`
-                        });
-                    } catch (e) {
-                        console.log("Welcome message skipped, continuing...");
-                    }
-
-                    // Wait for session file to be written
-                    await delay(15000);
-
-                    console.log('⏳ Reading session data...');
-
+                    // Read session file
                     const credsPath = path.join(tempDir, "creds.json");
-                    let sessionData = null;
-                    let attempts = 0;
-                    const maxAttempts = 20;
-
-                    while (attempts < maxAttempts && !sessionData) {
+                    
+                    if (fs.existsSync(credsPath)) {
+                        const sessionData = fs.readFileSync(credsPath);
+                        const base64 = Buffer.from(sessionData).toString('base64');
+                        
                         try {
-                            if (fs.existsSync(credsPath)) {
-                                const data = fs.readFileSync(credsPath);
-                                if (data && data.length > 100) {
-                                    sessionData = data;
-                                    console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
-                                    break;
-                                } else {
-                                    console.log(`⚠️ Session file small: ${data?.length || 0} bytes`);
-                                }
-                            } else {
-                                console.log(`⚠️ Session file not found, attempt ${attempts + 1}/${maxAttempts}`);
-                            }
-                            await delay(3000);
-                            attempts++;
-                        } catch (readError) {
-                            console.error("Read attempt error:", readError);
-                            await delay(2000);
-                            attempts++;
-                        }
-                    }
-
-                    if (!sessionData) {
-                        console.error("Failed to read session data after all attempts");
-                        try {
-                            await sock.sendMessage(sock.user.id, {
-                                text: "❌ Failed to generate session. Please try again."
+                            // Send session to user
+                            await sock.sendMessage(sock.user.id, { 
+                                text: `✅ *Your Session ID:*\n\n${base64}` 
                             });
-                        } catch (e) {}
-                        await cleanUpSession();
-                        sock.end();
-                        return;
-                    }
-
-                    // Convert to base64 and send
-                    const base64 = Buffer.from(sessionData).toString('base64');
-                    console.log('✅ Session encoded to base64');
-
-                    try {
-                        console.log('📤 Sending session to user...');
-
-                        // Split long session into chunks if needed
-                        const maxChunkSize = 65536; // WhatsApp message limit
-                        if (base64.length > maxChunkSize) {
-                            const chunks = base64.match(new RegExp(`.{1,${maxChunkSize}}`, 'g'));
-                            for (const chunk of chunks) {
-                                await sock.sendMessage(sock.user.id, { text: chunk });
-                                await delay(1000);
-                            }
-                        } else {
-                            await sock.sendMessage(sock.user.id, { text: base64 });
+                            
+                            await delay(2000);
+                            
+                            // Send info message
+                            await sock.sendMessage(sock.user.id, {
+                                text: `◈━━━━━━━━━━━◈\n✅ *SESSION CONNECTED*\n\n│❒ Copy the session ID above 🔐\n\n│❒ Support:\n> Owner: wa.me/254735342808\n> Repo: github.com/xhclintohn/Toxic-MD\n◈━━━━━━━━━━━◈`
+                            });
+                            
+                        } catch (e) {
+                            console.error("Error sending messages:", e);
                         }
-
-                        await delay(2000);
-
-                        const infoMessage = `◈━━━━━━━━━━━◈\n✅ *SESSION CONNECTED*\n\n│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐\n\n│❒ Need help? Reach out to us:\n\n*『••• Visit For Help •••』*\n\n> Owner: https://wa.me/254735342808\n> WaGroup: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI\n> WaChannel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19\n> Instagram: https://www.instagram.com/xh_clinton\n> BotRepo: https://github.com/xhclintohn/Toxic-MD\n\n│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)\n◈━━━━━━━━━━━◈`;
-
-                        console.log('📤 Sending info message...');
-                        await sock.sendMessage(sock.user.id, { text: infoMessage });
-
-                        console.log('⏳ Finalizing session...');
-                        await delay(5000);
-                        console.log('✅ Session complete, closing connection...');
-
-                        sock.end();
-                        await cleanUpSession();
-
-                    } catch (sendError) {
-                        console.error("Error sending session:", sendError);
-                        await cleanUpSession();
-                        sock.end();
                     }
-
+                    
+                    // Close connection after sending
+                    await delay(5000);
+                    sock.end();
+                    await cleanUpSession();
+                    
                 } else if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     if (statusCode !== 401) {
-                        console.log('⚠️ Connection closed, but not logged out');
+                        console.log('Connection closed, reconnecting...');
                     } else {
-                        console.log('❌ Connection closed permanently (logged out)');
+                        console.log('Logged out');
+                        await cleanUpSession();
                     }
-                    await cleanUpSession();
                 }
             });
 
         } catch (err) {
-            console.error('❌ Error during pairing:', err);
+            console.error('❌ Error:', err);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
-                res.status(500).json({ error: 'Service Unavailable. Please try again.' });
+                res.status(500).json({ error: 'Service Unavailable' });
                 responseSent = true;
             }
         }
     }
 
-    // Set timeout (5 minutes)
-    const timeoutId = setTimeout(async () => {
+    // Start the process
+    startPairing();
+
+    // Timeout
+    setTimeout(async () => {
         if (!responseSent && !res.headersSent) {
-            res.status(408).json({ error: "Request timeout - please try again" });
+            res.status(408).json({ error: "Timeout" });
             responseSent = true;
         }
         await cleanUpSession();
-    }, 300000);
+    }, 60000);
 
-    try {
-        await startPairing();
-    } catch (finalError) {
-        console.error("Final error:", finalError);
-        await cleanUpSession();
-        if (!responseSent && !res.headersSent) {
-            res.status(500).json({ error: "Service Error" });
-        }
-    } finally {
-        clearTimeout(timeoutId);
-    }
 });
 
 module.exports = router;
