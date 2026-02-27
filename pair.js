@@ -4,7 +4,7 @@ const path = require('path');
 const pino = require('pino');
 const { makeid } = require('./id');
 
-// Changed from @whiskeysockets/baileys to @itsukichan/baileys
+// Using the GitHub fork - keep as @whiskeysockets/baileys in require
 const {
     default: Toxic_Tech,
     useMultiFileAuthState,
@@ -28,7 +28,6 @@ router.get('/', async (req, res) => {
     let sessionCleanedUp = false;
     let pairingCodeSent = false;
 
-    // Validate phone number
     if (!num) {
         return res.status(400).json({ error: 'Phone number is required' });
     }
@@ -44,29 +43,33 @@ router.get('/', async (req, res) => {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
-            // Simplified version - @itsukichan/baileys handles versioning internally
+            // FIXED: According to itsukichann/baileys docs
             const sock = Toxic_Tech({
-                auth: state,
+                auth: state,  // itsukichann fork uses direct state, not {creds, keys}
                 logger: pino({ level: 'silent' }),
                 printQRInTerminal: false,
-                browser: Browsers.windows('Desktop'),
+                browser: Browsers.windows('Desktop'), 
                 syncFullHistory: false,
                 markOnlineOnConnect: true,
-                // @itsukichan/baileys specific features available
+                // Itsukichann specific features
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+                patchMessageBeforeSending: true, // Itsukichann feature
+                version: [2, 2413, 1], // Fixed version for stability
             });
 
             sock.ev.on('creds.update', saveCreds);
 
-            // Wait for connection to be ready before requesting pairing code
-            await delay(2000);
+            // Wait for socket to be ready
+            await delay(3000);
 
-            // Request pairing code
-            if (!sock.authState.creds.registered) {
+            // Request pairing code - itsukichann style
+            if (!sock.authState?.creds?.registered) {
                 try {
+                    // Itsukichann fork expects just the number
                     const code = await sock.requestPairingCode(num);
+                    
                     if (!responseSent && !res.headersSent) {
-                        res.json({ code });
+                        res.json({ code: code });
                         responseSent = true;
                         pairingCodeSent = true;
                     }
@@ -82,13 +85,13 @@ router.get('/', async (req, res) => {
             }
 
             sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect } = update;
+                const { connection, lastDisconnect, qr } = update;
 
                 if (connection === 'open') {
                     console.log('✅ Toxic-MD connected to WhatsApp.');
 
                     try {
-                        // Send welcome message
+                        // Itsukichann fork supports enhanced messages
                         await sock.sendMessage(sock.user.id, {
                             text: `◈━━━━━━━━━━━◈\n│❒ Hello! 👋 You're now connected to Toxic-MD.\n\n│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂\n◈━━━━━━━━━━━◈`
                         });
@@ -96,9 +99,9 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                    // Wait for session file to be written
+                    // Wait for session
                     await delay(15000);
-                    
+
                     console.log('⏳ Reading session data...');
 
                     const credsPath = path.join(tempDir, "creds.json");
@@ -114,68 +117,44 @@ router.get('/', async (req, res) => {
                                     sessionData = data;
                                     console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
                                     break;
-                                } else {
-                                    console.log(`⚠️ Session file small: ${data?.length || 0} bytes`);
                                 }
-                            } else {
-                                console.log(`⚠️ Session file not found, attempt ${attempts + 1}/${maxAttempts}`);
                             }
                             await delay(3000);
                             attempts++;
                         } catch (readError) {
-                            console.error("Read attempt error:", readError);
                             await delay(2000);
                             attempts++;
                         }
                     }
 
                     if (!sessionData) {
-                        console.error("Failed to read session data after all attempts");
-                        try {
-                            await sock.sendMessage(sock.user.id, {
-                                text: "❌ Failed to generate session. Please try again."
-                            });
-                        } catch (e) {}
+                        console.error("Failed to read session data");
+                        await sock.sendMessage(sock.user.id, {
+                            text: "❌ Failed to generate session. Please try again."
+                        }).catch(() => {});
                         await cleanUpSession();
                         sock.end();
                         return;
                     }
 
-                    // Convert to base64 and send
                     const base64 = Buffer.from(sessionData).toString('base64');
-                    console.log('✅ Session encoded to base64');
+                    console.log('✅ Session encoded');
 
                     try {
-                        console.log('📤 Sending session to user...');
-                        
-                        // Split long session into chunks if needed
-                        const maxChunkSize = 65536; // WhatsApp message limit
-                        if (base64.length > maxChunkSize) {
-                            const chunks = base64.match(new RegExp(`.{1,${maxChunkSize}}`, 'g'));
-                            for (const chunk of chunks) {
-                                await sock.sendMessage(sock.user.id, { text: chunk });
-                                await delay(1000);
-                            }
-                        } else {
-                            await sock.sendMessage(sock.user.id, { text: base64 });
-                        }
-                        
+                        // Send session
+                        await sock.sendMessage(sock.user.id, { text: base64 });
                         await delay(2000);
 
-                        const infoMessage = `◈━━━━━━━━━━━◈\n✅ *SESSION CONNECTED*\n\n│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐\n\n│❒ Need help? Reach out to us:\n\n*『••• Visit For Help •••』*\n\n> Owner: https://wa.me/254735342808\n> WaGroup: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI\n> WaChannel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19\n> Instagram: https://www.instagram.com/xh_clinton\n> BotRepo: https://github.com/xhclintohn/Toxic-MD\n\n│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)\n◈━━━━━━━━━━━◈`;
+                        const infoMessage = `◈━━━━━━━━━━━◈\n✅ *SESSION CONNECTED*\n\n│❒ Copy the session ID above 🔐\n\n│❒ Support:\n> Owner: https://wa.me/254735342808\n> Group: https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI\n> Channel: https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19\n> Repo: https://github.com/xhclintohn/Toxic-MD\n◈━━━━━━━━━━━◈`;
 
-                        console.log('📤 Sending info message...');
                         await sock.sendMessage(sock.user.id, { text: infoMessage });
-
-                        console.log('⏳ Finalizing session...');
-                        await delay(5000);
-                        console.log('✅ Session complete, closing connection...');
                         
+                        await delay(5000);
                         sock.end();
                         await cleanUpSession();
 
                     } catch (sendError) {
-                        console.error("Error sending session:", sendError);
+                        console.error("Send error:", sendError);
                         await cleanUpSession();
                         sock.end();
                     }
@@ -183,28 +162,27 @@ router.get('/', async (req, res) => {
                 } else if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     if (statusCode !== 401) {
-                        console.log('⚠️ Connection closed, but not logged out');
+                        console.log('Reconnecting...');
+                        startPairing();
                     } else {
-                        console.log('❌ Connection closed permanently (logged out)');
+                        await cleanUpSession();
                     }
-                    await cleanUpSession();
                 }
             });
 
         } catch (err) {
-            console.error('❌ Error during pairing:', err);
+            console.error('❌ Error:', err);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
-                res.status(500).json({ error: 'Service Unavailable. Please try again.' });
+                res.status(500).json({ error: 'Service Error' });
                 responseSent = true;
             }
         }
     }
 
-    // Set timeout (5 minutes)
     const timeoutId = setTimeout(async () => {
         if (!responseSent && !res.headersSent) {
-            res.status(408).json({ error: "Request timeout - please try again" });
+            res.status(408).json({ error: "Timeout" });
             responseSent = true;
         }
         await cleanUpSession();
@@ -212,9 +190,8 @@ router.get('/', async (req, res) => {
 
     try {
         await startPairing();
-    } catch (finalError) {
-        console.error("Final error:", finalError);
-        await cleanUpSession();
+    } catch (error) {
+        console.error(error);
         if (!responseSent && !res.headersSent) {
             res.status(500).json({ error: "Service Error" });
         }
