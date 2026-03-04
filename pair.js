@@ -39,16 +39,15 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
-            const version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version,
+                version: [2,3000,1033105955],
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "silent", stream: 'store' }))
                 },
                 browser: Browsers("Chrome"),
                 syncFullHistory: false,
@@ -68,9 +67,8 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
-            // === Pairing Code Generation ===  
             if (!sock.authState.creds.registered) {
-                await delay(2000); 
+                await delay(3000); 
                 const code = await sock.requestPairingCode(num);
                 if (!responseSent && !res.headersSent) {
                     res.json({ code: code });
@@ -85,6 +83,7 @@ router.get('/', async (req, res) => {
 
                 if (connection === 'open') {
                     console.log('✅ Toxic-MD successfully connected to WhatsApp.');
+                    console.log('⏳ Waiting for session to sync and stabilize...');
 
                     try {
                         await sock.sendMessage(sock.user.id, {
@@ -101,35 +100,42 @@ router.get('/', async (req, res) => {
                         console.log("Welcome message skipped, continuing...");
                     }
 
-                    await delay(15000);
+                    await delay(25000);
+                    console.log('⏳ Reading session data...');
 
                     const credsPath = path.join(tempDir, "creds.json");
 
-
                     let sessionData = null;
                     let attempts = 0;
-                    const maxAttempts = 10;
+                    const maxAttempts = 15; 
 
                     while (attempts < maxAttempts && !sessionData) {
                         try {
                             if (fs.existsSync(credsPath)) {
                                 const data = fs.readFileSync(credsPath);
-                                if (data && data.length > 50) {
+
+                                if (data && data.length > 100) { 
                                     sessionData = data;
+                                    console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
                                     break;
+                                } else {
+                                    console.log(`⚠️ Session file exists but size is small: ${data?.length || 0} bytes`);
                                 }
+                            } else {
+                                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
                             }
-                            await delay(4000);
+
+                            await delay(6000);
                             attempts++;
                         } catch (readError) {
                             console.error("Read attempt error:", readError);
-                            await delay(2000);
+                            await delay(3000); 
                             attempts++;
                         }
                     }
 
                     if (!sessionData) {
-                        console.error("Failed to read session data");
+                        console.error("Failed to read session data after all attempts");
                         try {
                             await sock.sendMessage(sock.user.id, {
                                 text: "Failed to generate session. Please try again."
@@ -141,11 +147,15 @@ router.get('/', async (req, res) => {
                     }
 
                     const base64 = Buffer.from(sessionData).toString('base64');
+                    console.log('✅ Session data encoded to base64');
 
                     try {
+                        console.log('📤 Sending session data to user...');
                         const sentSession = await sock.sendMessage(sock.user.id, {
                             text: base64
                         });
+
+                        await delay(3000);
 
                         const infoMessage = `  
 ◈━━━━━━━━━━━◈  
@@ -175,9 +185,13 @@ https://github.com/xhclintohn/Toxic-MD
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`;
 
+                        console.log('📤 Sending information message...');
                         await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
 
-                        await delay(2000);
+                        console.log('⏳ Finalizing session...');
+                        await delay(5000);
+
+                        console.log('✅ Session completed, closing connection...');
                         sock.ws.close();
                         await cleanUpSession();
 
@@ -190,7 +204,7 @@ https://github.com/xhclintohn/Toxic-MD
                 } else if (connection === "close") {
                     if (lastDisconnect?.error?.output?.statusCode !== 401) {
                         console.log('⚠️ Connection closed, attempting to reconnect...');
-                        await delay(10000);
+                        await delay(15000); 
                         startPairing();
                     } else {
                         console.log('❌ Connection closed permanently');
@@ -201,7 +215,6 @@ https://github.com/xhclintohn/Toxic-MD
                 }
             });
 
-            // Handle errors
             sock.ev.on('connection.update', (update) => {
                 if (update.qr) {
                     console.log("QR code received");
@@ -221,11 +234,10 @@ https://github.com/xhclintohn/Toxic-MD
         }
     }
 
-
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
             reject(new Error("Pairing process timeout"));
-        }, 180000);
+        }, 300000);
     });
 
     try {
