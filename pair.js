@@ -10,7 +10,6 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
-    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -40,33 +39,47 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
-            const { version } = await fetchLatestBaileysVersion();
+            const version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version,
-                logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
+                syncFullHistory: false,
+                markOnlineOnConnect: true,
+                connectTimeoutMs: 120000,
+                defaultQueryTimeoutMs: 60000,
+                keepAliveIntervalMs: 25000,
+                generateHighQualityLinkPreview: true,
+                emitOwnEvents: true,
+                fireInitQueries: true,
+                patchMessageBeforeSending: (message) => {
+                    const requiresPatch = !!(
+                        message.buttonsMessage ||
+                        message.templateMessage ||
+                        message.listMessage
+                    );
+                    if (requiresPatch) {
+                        message = {
+                            viewOnceMessage: {
+                                message: {
+                                    messageContextInfo: {
+                                        deviceListMetadataVersion: 2,
+                                        deviceListMetadata: {},
+                                    },
+                                    ...message,
+                                },
+                            },
+                        };
+                    }
+                    return message;
+                },
+                version: version,
+                browser: Browsers("Chrome"),
+                logger: pino({ level: 'silent' }),
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "silent", stream: 'store' }))
-                },
-                browser: Browsers("Chrome"),
-                syncFullHistory: false,
-                generateHighQualityLinkPreview: true,
-                shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-                getMessage: async () => undefined,
-                markOnlineOnConnect: true,
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 20000,
-                emitOwnEvents: true,
-                fireInitQueries: true,
-                defaultQueryTimeoutMs: 60000,
-                transactionOpts: {
-                    maxCommitRetries: 10,
-                    delayBetweenTriesMs: 3000
-                },
-                retryRequestDelayMs: 250
+                }
             });
 
             if (!sock.authState.creds.registered) {
