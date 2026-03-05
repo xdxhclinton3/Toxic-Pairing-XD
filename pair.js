@@ -39,17 +39,18 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         try {
+            const version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
             const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
             const sock = Toxic_Tech({
-                version: [2,3000,1033105955],
+                version,
                 logger: pino({ level: 'fatal' }).child({ level: 'fatal' }),
                 printQRInTerminal: false,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "silent", stream: 'store' }))
                 },
-                browser: Browsers("Chrome"),
+                browser: Browsers.macOS("Chrome"),
                 syncFullHistory: false,
                 generateHighQualityLinkPreview: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
