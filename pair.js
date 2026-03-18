@@ -25,6 +25,7 @@ const num = (req.query.number || '').replace(/[^0-9]/g, '');
 const tempDir = path.join(sessionDir, id);
 let responseSent = false;
 let sessionCleanedUp = false;
+let sessionSent = false;
 
 async function cleanUpSession() {  
     if (!sessionCleanedUp) {  
@@ -82,7 +83,8 @@ async function startPairing() {
         sock.ev.on('connection.update', async (update) => {  
             const { connection, lastDisconnect } = update;  
 
-            if (connection === 'open') {  
+            if (connection === 'open') {
+                sessionSent = true;  
                 console.log('✅ Toxic-MD successfully connected to WhatsApp.');  
                 console.log('⏳ Waiting for session to sync and stabilize...');  
 
@@ -213,7 +215,8 @@ console.log('📤 Sending information message...');
                     sock.ws.close();  
                 }  
 
-            } else if (connection === "close") {  
+            } else if (connection === "close") {
+                if (sessionSent) return;  
                 if (lastDisconnect?.error?.output?.statusCode !== 401) {  
                     console.log('⚠️ Connection closed, attempting to reconnect...');  
                     await delay(15000);   
