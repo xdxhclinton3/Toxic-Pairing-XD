@@ -60,15 +60,14 @@ router.get('/', async (req, res) => {
 
         sock.ev.on('creds.update', saveCreds)
 
-        if (!state.creds.registered && !pairingCodeRequested) {
-            pairingCodeRequested = true
-            await delay(3000)
-
-            const code = await sock.requestPairingCode(number)
-            res.json({ code })
-        }
-
         sock.ev.on('connection.update', async ({ connection }) => {
+
+            if (connection === 'connecting' && !state.creds.registered && !pairingCodeRequested) {
+                pairingCodeRequested = true
+                await delay(3000)
+                const code = await sock.requestPairingCode(number)
+                res.json({ code })
+            }
 
             if (connection === 'open' && !finished) {
 
