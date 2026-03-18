@@ -1,173 +1,156 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const pino = require('pino');
+const PastebinAPI = require('pastebin-js');
+const pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL');
 const { makeid } = require('./id');
-
+const QRCode = require('qrcode');
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+let router = express.Router();
+const pino = require('pino');
 const {
     default: Toxic_Tech,
     useMultiFileAuthState,
+    jidNormalizedUser,
+    Browsers,
     delay,
     makeCacheableSignalKeyStore,
-    Browsers,
+    fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
-const router = express.Router();
-const sessionDir = path.join(__dirname, "temp");
-
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
+function removeFile(FilePath) {
+    if (!fs.existsSync(FilePath)) return false;
+    fs.rmSync(FilePath, {
+        recursive: true,
+        force: true
+    });
 }
 
-function removeFile(p) {
-    if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
-}
+const { readFile } = require('node:fs/promises');
 
 router.get('/', async (req, res) => {
     const id = makeid();
-    const num = (req.query.number || '').replace(/[^0-9]/g, '');
-    const tempDir = path.join(sessionDir, id);
-
-    if (!num) return res.status(400).json({ error: "Invalid number" });
-
     let responseSent = false;
-    let sessionCleanedUp = false;
-    let pairingCodeRequested = false;
-    let sessionSent = false;
 
-    async function cleanUpSession() {
-        if (!sessionCleanedUp) {
-            sessionCleanedUp = true;
-            try { removeFile(tempDir); } catch {}
-        }
-    }
+    async function Toxic_MD_QR_CODE() {
+        try {
+            const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
 
-    try {
-        const version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
-        const { state, saveCreds } = await useMultiFileAuthState(tempDir);
+            let Qr_Code_By_Toxic_Tech = Toxic_Tech({
+                version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }).child({ level: 'silent' })),
+                },
+                printQRInTerminal: false,
+                logger: pino({ level: 'silent' }).child({ level: 'silent' }),
+                browser: Browsers.macOS("Chrome"),
+                syncFullHistory: false,
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 30000,
+                generateHighQualityLinkPreview: true,
+                markOnlineOnConnect: false
+            });
 
-        const sock = Toxic_Tech({
-            version,
-            logger: pino({ level: 'silent' }),
-            printQRInTerminal: false,
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
-            },
-            browser: Browsers.ubuntu('Chrome'),
-            syncFullHistory: false,
-            generateHighQualityLinkPreview: true,
-            shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
-            getMessage: async () => undefined,
-            markOnlineOnConnect: true,
-            connectTimeoutMs: 120000,
-            keepAliveIntervalMs: 30000,
-            emitOwnEvents: true,
-            fireInitQueries: true,
-            defaultQueryTimeoutMs: 60000,
-            transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
-            retryRequestDelayMs: 10000
-        });
+            Qr_Code_By_Toxic_Tech.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-
-            if (connection === 'connecting' && !state.creds.registered && !pairingCodeRequested) {
-                pairingCodeRequested = true;
-                await delay(3000);
+            Qr_Code_By_Toxic_Tech.ev.on('connection.update', async (s) => {
                 try {
-                    const code = await sock.requestPairingCode(num);
-                    if (!responseSent && !res.headersSent) {
-                        res.json({ code });
+                    const { connection, lastDisconnect, qr } = s;
+
+                    if (qr && !responseSent && !res.headersSent) {
+                        await res.end(await QRCode.toBuffer(qr));
                         responseSent = true;
                     }
-                } catch (err) {
-                    console.error('❌ Failed to get pairing code:', err);
-                    if (!responseSent && !res.headersSent) {
-                        res.status(500).json({ error: 'Failed to get pairing code' });
-                        responseSent = true;
-                    }
-                    await cleanUpSession();
-                }
-            }
 
-            if (connection === 'open' && !sessionSent) {
-                sessionSent = true;
-                console.log('✅ Connected to WhatsApp');
+                    if (connection === 'open') {
+                        console.log(`✅ QR Code connected for session ${id}`);
 
-                try {
-                    await sock.sendMessage(sock.user.id, {
-                        text: `◈━━━━━━━━━━━◈\n│❒ Hello! 👋 You're now connected to Toxic-MD.\n\n│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂\n◈━━━━━━━━━━━◈`
-                    });
-                } catch {}
+                        await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: `
+◈━━━━━━━━━━━◈
+│❒ Hello! 👋 You're now connected to Toxic-MD.
 
-                const credsPath = path.join(tempDir, 'creds.json');
-                let sessionData = null;
-                let attempts = 0;
+│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+◈━━━━━━━━━━━◈
+` 
+                        });
 
-                while (attempts < 10 && !sessionData) {
-                    await delay(3000);
-                    try {
-                        if (fs.existsSync(credsPath)) {
-                            const data = fs.readFileSync(credsPath);
-                            if (data && data.length > 100) {
-                                sessionData = data;
-                                break;
-                            }
+                        await delay(5000);
+
+                        let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
+
+                        await delay(8000);
+
+                        let b64data = Buffer.from(data).toString('base64');
+                        let session = await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: '' + b64data 
+                        });
+
+                        let Toxic_MD_TEXT = `
+           ◈━━━━━━◈
+      SESSION CONNECTED
+      
+│❒ The long code above is your **Session ID**. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+
+│❒ Need help? Reach out to us:
+
+『••• Visit For Help •••』
+> Owner/Developer:
+ _https://wa.me/254735342808_
+
+> WaGroup:
+ _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
+
+> WaChannel:
+ _https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
+
+> Instagram:
+ https://www.instagram.com/xh_clinton
+ 
+ > Bot Repo
+ _https://github.com/xhclintohn/Toxic-MD_
+
+│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
+◈━━━━━━━━━━━◈`;
+
+                        await Qr_Code_By_Toxic_Tech.sendMessage(Qr_Code_By_Toxic_Tech.user.id, { 
+                            text: Toxic_MD_TEXT 
+                        }, { 
+                            quoted: session 
+                        });
+
+                        await delay(1000);
+                        await Qr_Code_By_Toxic_Tech.ws.close();
+                        await removeFile('./temp/' + id);
+
+                    } else if (connection === 'close') {
+                        const statusCode = lastDisconnect?.error?.output?.statusCode;
+
+                        if (statusCode === 401) {
+                            console.log(`⚠️ Logged out for session ${id}`);
+                            await removeFile('./temp/' + id);
+                        } else if (statusCode !== 401) {
+                            console.log(`🔄 Reconnecting session ${id}...`);
+                            await delay(5000);
+                            Toxic_MD_QR_CODE();
                         }
-                    } catch {}
-                    attempts++;
-                }
-
-                if (!sessionData) {
-                    console.error('❌ Failed to read session data');
-                    try { await sock.sendMessage(sock.user.id, { text: 'Failed to generate session. Please try again.' }); } catch {}
-                    sock.ws.close();
-                    await cleanUpSession();
-                    return;
-                }
-
-                const base64 = Buffer.from(sessionData).toString('base64');
-
-                try {
-                    const sentSession = await sock.sendMessage(sock.user.id, { text: base64 });
-
-                    await delay(2000);
-
-                    const infoMessage = `◈━━━━━━━━━━━◈\nSESSION CONNECTED\n\n│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐\n\n│❒ Need help? Reach out to us:\n\n『••• Visit For Help •••』\n\n> Owner:\nhttps://wa.me/254735342808\n\n> WaGroup:\nhttps://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI\n\n> WaChannel:\nhttps://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19\n\n> Instagram:\nhttps://www.instagram.com/xh_clinton\n\n> BotRepo:\nhttps://github.com/xhclintohn/Toxic-MD\n\n│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)\n◈━━━━━━━━━━━◈`;
-
-                    await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });
-
-                    await delay(3000);
+                    }
                 } catch (err) {
-                    console.error('❌ Error sending session:', err);
+                    console.log(`❌ Connection update error: ${err.message}`);
                 }
-
-                sock.ws.close();
-                await cleanUpSession();
+            });
+        } catch (err) {
+            console.log('❌ Service error:', err.message);
+            await removeFile('./temp/' + id);
+            if (!res.headersSent) {
+                await res.status(500).json({ 
+                    code: 'Service is Currently Unavailable. Please try again.' 
+                });
             }
-
-            if (connection === 'close') {
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                if (statusCode === 401) {
-                    console.log('❌ Logged out');
-                    await cleanUpSession();
-                } else {
-                    console.log('⚠️ Connection closed, code:', statusCode);
-                    if (!sessionSent) await cleanUpSession();
-                }
-            }
-        });
-
-    } catch (err) {
-        console.error('❌ Error during pairing:', err);
-        await cleanUpSession();
-        if (!responseSent && !res.headersSent) {
-            res.status(500).json({ error: 'Service Unavailable. Please try again.' });
         }
     }
+
+    return await Toxic_MD_QR_CODE();
 });
 
 module.exports = router;
