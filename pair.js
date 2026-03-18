@@ -56,7 +56,7 @@ async function startPairing() {
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),  
             getMessage: async () => undefined,  
             markOnlineOnConnect: true,  
-            connectTimeoutMs: 1200000,  
+            connectTimeoutMs: 120000,  
             keepAliveIntervalMs: 30000,  
             emitOwnEvents: true,  
             fireInitQueries: true,  
