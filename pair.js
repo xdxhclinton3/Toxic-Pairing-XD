@@ -10,9 +10,8 @@ const {
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
+    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
-
-const { version } = require('@whiskeysockets/baileys/lib/Defaults/baileys-version.json');
 
 const router = express.Router();
 const sessionDir = path.join(__dirname, 'temp');
@@ -25,6 +24,20 @@ function removePath(targetPath) {
     if (fs.existsSync(targetPath)) {
         fs.rmSync(targetPath, { recursive: true, force: true });
     }
+}
+
+function readSessionBundle(dir) {
+    const files = fs.readdirSync(dir);
+    const bundle = {};
+
+    for (const file of files) {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (!stat.isFile()) continue;
+        bundle[file] = fs.readFileSync(fullPath, 'base64');
+    }
+
+    return Buffer.from(JSON.stringify(bundle)).toString('base64');
 }
 
 router.get('/', async (req, res) => {
@@ -84,54 +97,50 @@ router.get('/', async (req, res) => {
         openHandled = true;
 
         console.log('✅ Toxic-MD successfully connected to WhatsApp.');
-        console.log('⏳ Waiting for session to sync and stabilize...');
+        console.log('⏳ Waiting for auth files to stabilize...');
 
         try {
             await sock.sendMessage(sock.user.id, {
                 text: `
 ◈━━━━━━━━━━━◈
 │❒ Hello! 👋 You're now connected to Toxic-MD.
-│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+│❒ Please wait a moment while we generate your session bundle. 🙂
 ◈━━━━━━━━━━━◈
 `
             });
-        } catch (err) {
+        } catch {
             console.log('Welcome message skipped, continuing...');
         }
 
-        await delay(25000);
-        console.log('⏳ Reading session data...');
+        await delay(10000);
 
-        const credsPath = path.join(tempDir, 'creds.json');
-        let sessionData = null;
+        let sessionBundle = null;
         let attempts = 0;
-        const maxAttempts = 15;
+        const maxAttempts = 12;
 
-        while (attempts < maxAttempts && !sessionData && !finished) {
+        while (attempts < maxAttempts && !sessionBundle && !finished) {
             try {
-                if (fs.existsSync(credsPath)) {
-                    const data = fs.readFileSync(credsPath);
-                    if (data && data.length > 100) {
-                        sessionData = data;
-                        console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
+                const files = fs.existsSync(tempDir) ? fs.readdirSync(tempDir) : [];
+                if (files.length > 0) {
+                    sessionBundle = readSessionBundle(tempDir);
+                    if (sessionBundle && sessionBundle.length > 50) {
+                        console.log(`✅ Session bundle created on attempt ${attempts + 1}`);
                         break;
-                    } else {
-                        console.log(`⚠️ Session file exists but size is small: ${data?.length || 0} bytes`);
                     }
                 } else {
-                    console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                    console.log(`⚠️ No auth files yet, attempt ${attempts + 1}/${maxAttempts}`);
                 }
-            } catch (readError) {
-                console.error('Read attempt error:', readError);
+            } catch (err) {
+                console.error('Bundle read error:', err);
             }
 
             attempts++;
-            if (!sessionData) {
-                await delay(6000);
+            if (!sessionBundle) {
+                await delay(4000);
             }
         }
 
-        if (!sessionData) {
+        if (!sessionBundle) {
             try {
                 await sock.sendMessage(sock.user.id, {
                     text: 'Failed to generate session. Please try again.'
@@ -141,22 +150,20 @@ router.get('/', async (req, res) => {
             return;
         }
 
-        const base64 = Buffer.from(sessionData).toString('base64');
-        console.log('✅ Session data encoded to base64');
-
         try {
-            console.log('📤 Sending session data to user...');
+            console.log('📤 Sending session bundle to user...');
             const sentSession = await sock.sendMessage(sock.user.id, {
-                text: base64
+                text: sessionBundle
             });
 
-            await delay(3000);
+            await delay(2000);
 
             const infoMessage = `
 ◈━━━━━━━━━━━◈
 SESSION CONNECTED
 
-│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+│❒ The long code above is your full multi-file session bundle.
+│❒ Save it safely. Your restore code must unpack it back into the auth folder before starting the bot.
 
 │❒ Need help? Reach out to us:
 
@@ -181,22 +188,20 @@ https://github.com/xhclintohn/Toxic-MD
 ◈━━━━━━━━━━━◈
 `;
 
-            console.log('📤 Sending information message...');
             await sock.sendMessage(
                 sock.user.id,
                 { text: infoMessage },
                 { quoted: sentSession }
             );
 
-            console.log('⏳ Finalizing session...');
-            await delay(5000);
+            await delay(3000);
 
             finished = true;
             if (pairingTimeout) clearTimeout(pairingTimeout);
             await closeSocket();
             await cleanUpSession();
         } catch (sendError) {
-            console.error('Error sending session:', sendError);
+            console.error('Error sending session bundle:', sendError);
             await fail(500, 'Failed to send session');
         }
     }
@@ -204,6 +209,7 @@ https://github.com/xhclintohn/Toxic-MD
     async function startSocket() {
         if (finished) return;
 
+        const { version } = await fetchLatestBaileysVersion();
         const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
         sock = Toxic_Tech({
@@ -212,10 +218,7 @@ https://github.com/xhclintohn/Toxic-MD
             printQRInTerminal: false,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(
-                    state.keys,
-                    pino({ level: 'silent' })
-                )
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
             },
             browser: Browsers.ubuntu('Chrome'),
             syncFullHistory: false,
@@ -245,19 +248,12 @@ https://github.com/xhclintohn/Toxic-MD
                 res.json({ code });
                 responseSent = true;
             }
-        } else if (state.creds.registered && !responseSent && !res.headersSent) {
-            res.json({ code: 'Already registered' });
-            responseSent = true;
         }
 
         sock.ev.on('connection.update', async update => {
-            const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect } = update;
 
             if (finished) return;
-
-            if (qr) {
-                console.log('QR code received');
-            }
 
             if (connection === 'connecting') {
                 console.log('⏳ Connecting to WhatsApp...');
