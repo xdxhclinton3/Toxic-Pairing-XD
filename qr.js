@@ -163,7 +163,7 @@ SESSION CONNECTED
 
 『••• Visit For Help •••』
 > Owner/Developer:
-_https://wa.me/254735342808_
+_https://wa.me/254114885159_
 
 > WaGroup:
 _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
