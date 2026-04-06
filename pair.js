@@ -172,7 +172,7 @@ SESSION CONNECTED
 『••• Visit For Help •••』
 
 > Owner:
-https://wa.me/254735342808
+https://wa.me/254114885159
 
 
 
