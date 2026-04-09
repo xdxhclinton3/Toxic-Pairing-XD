@@ -95,7 +95,7 @@ async function startPairing() {
 ◈━━━━━━━━━━━◈
 │❒ Hello! 👋 You're now connected to Toxic-MD.
 
-│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+│❒ Please wait 60-90 seconds while we generate a stable session ID. It will be sent shortly... 🙂
 ◈━━━━━━━━━━━◈
 `,
 });
@@ -103,36 +103,40 @@ async function startPairing() {
 console.log("Welcome message skipped, continuing...");
 }
 
-await delay(25000);  
+// INCREASED: Wait 45 seconds instead of 25 for initial sync
+await delay(45000);  
                 console.log('⏳ Reading session data...');  
 
                 const credsPath = path.join(tempDir, "creds.json");  
 
                 let sessionData = null;  
                 let attempts = 0;  
-                const maxAttempts = 15;   
+                // INCREASED: More attempts for larger accounts
+                const maxAttempts = 25;   
 
                 while (attempts < maxAttempts && !sessionData) {  
                     try {  
                         if (fs.existsSync(credsPath)) {  
                             const data = fs.readFileSync(credsPath);  
 
-                            if (data && data.length > 100) {   
+                            // INCREASED: Minimum size requirement for stable session
+                            if (data && data.length > 500) {   
                                 sessionData = data;  
                                 console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);  
                                 break;  
                             } else {  
-                                console.log(`⚠️ Session file exists but size is small: ${data?.length || 0} bytes`);  
+                                console.log(`⚠️ Session file exists but size is small (${data?.length || 0} bytes), waiting for complete session...`);  
                             }  
                         } else {  
                             console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);  
                         }  
 
-                        await delay(6000);  
+                        // INCREASED: Longer delay between attempts
+                        await delay(8000);  
                         attempts++;  
                     } catch (readError) {  
                         console.error("Read attempt error:", readError);  
-                        await delay(3000);   
+                        await delay(5000);   
                         attempts++;  
                     }  
                 }  
@@ -141,7 +145,7 @@ await delay(25000);
                     console.error("Failed to read session data after all attempts");  
                     try {  
                         await sock.sendMessage(sock.user.id, {  
-                            text: "Failed to generate session. Please try again."  
+                            text: "❌ Failed to generate stable session. Please try again or check your connection."  
                         });  
                     } catch (e) {}  
                     await cleanUpSession();  
@@ -150,7 +154,7 @@ await delay(25000);
                 }  
 
                 const base64 = Buffer.from(sessionData).toString('base64');  
-                console.log('✅ Session data encoded to base64');  
+                console.log(`✅ Session data encoded to base64 (${base64.length} characters)`);  
 
                 try {  
                     console.log('📤 Sending session data to user...');  
@@ -158,14 +162,17 @@ await delay(25000);
                         text: base64  
                     });  
 
-                    await delay(3000);  
+                    // INCREASED: Longer delay before info message
+                    await delay(5000);  
 
                     const infoMessage = `
 
 ◈━━━━━━━━━━━◈
-SESSION CONNECTED
+✅ SESSION CONNECTED & STABLE
 
 │❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+
+│❒ This session has been fully synced and is ready for deployment.
 
 │❒ Need help? Reach out to us:
 
@@ -174,27 +181,17 @@ SESSION CONNECTED
 > Owner:
 https://wa.me/254114885159
 
-
-
 > WaGroup:
 https://chat.whatsapp.com/GDcJihbSIYM0GzQJWKA6gS?mode=gi_t
-
-
 
 > WaChannel:
 https://whatsapp.com/channel/0029VbCKkVc7z4kh02WGqF0m
 
-
-
 > Instagram:
 https://www.instagram.com/xh_clinton
 
-
-
 > BotRepo:
 https://github.com/xhclintohn/Toxic-MD
-
-
 
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`;
@@ -202,10 +199,11 @@ https://github.com/xhclintohn/Toxic-MD
 console.log('📤 Sending information message...');  
                     await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });  
 
-                    console.log('⏳ Finalizing session...');  
-                    await delay(5000);  
+                    console.log('⏳ Finalizing session and closing connection...');  
+                    // INCREASED: More time for final cleanup
+                    await delay(8000);  
 
-                    console.log('✅ Session completed, closing connection...');  
+                    console.log('✅ Session completed successfully, closing connection...');  
                     sock.ws.close();  
                     await cleanUpSession();  
 
@@ -219,7 +217,7 @@ console.log('📤 Sending information message...');
                 if (sessionSent) return;  
                 if (lastDisconnect?.error?.output?.statusCode !== 401) {  
                     console.log('⚠️ Connection closed, attempting to reconnect...');  
-                    await delay(15000);   
+                    await delay(20000);   
                     startPairing();  
                 } else {  
                     console.log('❌ Connection closed permanently');  
@@ -249,10 +247,11 @@ console.log('📤 Sending information message...');
     }  
 }  
 
+
 const timeoutPromise = new Promise((_, reject) => {  
     setTimeout(() => {  
         reject(new Error("Pairing process timeout"));  
-    }, 300000);  
+    }, 420000);  
 });  
 
 try {  
