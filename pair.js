@@ -177,12 +177,12 @@ https://wa.me/254114885159
 
 
 > WaGroup:
-https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI
+https://chat.whatsapp.com/GDcJihbSIYM0GzQJWKA6gS?mode=gi_t
 
 
 
 > WaChannel:
-https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19
+https://whatsapp.com/channel/0029VbCKkVc7z4kh02WGqF0m
 
 
 
