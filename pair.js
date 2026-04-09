@@ -103,7 +103,6 @@ async function startPairing() {
 console.log("Welcome message skipped, continuing...");
 }
 
-// INCREASED: Wait 45 seconds instead of 25 for initial sync
 await delay(45000);  
                 console.log('⏳ Reading session data...');  
 
@@ -119,7 +118,7 @@ await delay(45000);
                         if (fs.existsSync(credsPath)) {  
                             const data = fs.readFileSync(credsPath);  
 
-                            // INCREASED: Minimum size requirement for stable session
+      session
                             if (data && data.length > 500) {   
                                 sessionData = data;  
                                 console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);  
@@ -131,7 +130,7 @@ await delay(45000);
                             console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);  
                         }  
 
-                        // INCREASED: Longer delay between attempts
+                      
                         await delay(8000);  
                         attempts++;  
                     } catch (readError) {  
@@ -162,7 +161,7 @@ await delay(45000);
                         text: base64  
                     });  
 
-                    // INCREASED: Longer delay before info message
+                
                     await delay(5000);  
 
                     const infoMessage = `
@@ -200,7 +199,7 @@ console.log('📤 Sending information message...');
                     await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });  
 
                     console.log('⏳ Finalizing session and closing connection...');  
-                    // INCREASED: More time for final cleanup
+                  
                     await delay(8000);  
 
                     console.log('✅ Session completed successfully, closing connection...');  
