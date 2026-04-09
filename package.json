@@ -12,14 +12,14 @@
   "license": "GPL-3.0",
   "dependencies": {
     "@whiskeysockets/baileys": "git+https://github.com/xhclintohn/Baileys",
-    "qrcode": "^1.5.3",
-    "awesome-phonenumber": "^2.64.0",
-    "pino": "^8.1.0",
+    "qrcode": "^1.5.4",
+    "awesome-phonenumber": "^7.8.0",
+    "pino": "^10.1.0",
     "phone": "3.1.30",
-    "jimp": "^0.22.10",
-    "lodash": "*",
-    "body-parser": "^1.20.1",
-    "pastebin-js": "1.0.6",
-    "express": "^4.18.1"
+    "jimp": "^1.6.0",
+    "lodash": "^4.17.21",
+    "body-parser": "^2.2.2",
+    "express": "^5.1.0",
+    "pastebin-js": "latest"
   }
 }
