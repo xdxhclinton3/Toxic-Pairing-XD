@@ -348,7 +348,7 @@
         dot.className = 'badge-dot loading';
 
         try {
-          const resp = await fetch('/qr?t=' + Date.now(), { cache: 'no-store' });
+          const resp = await fetch('/qr/code?t=' + Date.now(), { cache: 'no-store' });
           if (!resp.ok) throw new Error('Server error ' + resp.status);
           const ct = resp.headers.get('content-type') || '';
           if (ct.includes('image/png')) {
