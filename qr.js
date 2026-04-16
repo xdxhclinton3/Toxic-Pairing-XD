@@ -70,7 +70,6 @@ const { makeid } = require('./id');
               const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
               const { version } = await fetchLatestBaileysVersion();
 
-              // Remove listeners from previous sock before creating a new one
               if (sock?.ev) {
                   try { sock.ev.removeAllListeners('connection.update'); } catch {}
                   try { sock.ev.removeAllListeners('creds.update'); } catch {}
@@ -105,7 +104,6 @@ const { makeid } = require('./id');
 
                       if (finished) return;
 
-                      // ── QR ready — send PNG to browser ──────────────────────────
                       if (qr && !responseSent && !res.headersSent) {
                           try {
                               const buf = await QRCode.toBuffer(qr, {
@@ -122,9 +120,7 @@ const { makeid } = require('./id');
                           responseSent = true;
                       }
 
-                      // ── Scan complete ──────────────────────────────────────────
                       if (connection === 'open') {
-                          // Set finished immediately so no reconnect fires while we send messages
                           finished = true;
 
                           try {
@@ -167,19 +163,19 @@ const { makeid } = require('./id');
 
   『••• Visit For Help •••』
   > Owner/Developer:
-  _https://wa.me/254114885159_
+  _https:
 
   > WaGroup:
-  _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
+  _https:
 
   > WaChannel:
-  _https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
+  _https:
 
   > Instagram:
-  https://www.instagram.com/xh_clinton
+  https:
 
   > Bot Repo:
-  _https://github.com/xhclintohn/Toxic-MD_
+  _https:
 
   │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
   ◈━━━━━━━━━━━◈`
@@ -193,7 +189,6 @@ const { makeid } = require('./id');
                           return;
                       }
 
-                      // ── Socket closed ──────────────────────────────────────────
                       if (connection === 'close') {
                           if (finished) return;
 
@@ -207,8 +202,6 @@ const { makeid } = require('./id');
 
                           if (!reconnecting) {
                               reconnecting = true;
-                              // Code 515 = WhatsApp restart required after scan → reconnect fast
-                              // Any other code → reconnect with short backoff
                               await delay(statusCode === 515 ? 1000 : 3000);
                               reconnecting = false;
                               return startSocket();
@@ -225,7 +218,6 @@ const { makeid } = require('./id');
           }
       }
 
-      // Overall timeout — if something hangs for 7 minutes, give up
       const globalTimeout = setTimeout(function () {
           if (!finished) fail('Request timed out. Please try again.');
       }, 420000);
@@ -234,11 +226,7 @@ const { makeid } = require('./id');
           await startSocket();
       } catch {}
 
-      // Clear timeout once startSocket is awaited (it returns immediately on first run)
-      // The actual async work continues via event handlers
-      // globalTimeout keeps watching in case everything stalls
-      return; // response handled by event handlers or fail()
+      return;
   });
 
   module.exports = router;
-  
