@@ -1,243 +1,244 @@
 const { makeid } = require('./id');
-const QRCode = require('qrcode');
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const pino = require('pino');
+  const QRCode = require('qrcode');
+  const express = require('express');
+  const path = require('path');
+  const fs = require('fs');
+  const pino = require('pino');
 
-const {
-    default: Toxic_Tech,
-    useMultiFileAuthState,
-    Browsers,
-    delay,
-    makeCacheableSignalKeyStore,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
+  const {
+      default: Toxic_Tech,
+      useMultiFileAuthState,
+      Browsers,
+      delay,
+      makeCacheableSignalKeyStore,
+      fetchLatestBaileysVersion
+  } = require('@whiskeysockets/baileys');
 
-const router = express.Router();
-const tempRoot = path.join(__dirname, 'temp');
+  const router = express.Router();
+  const tempRoot = path.join(__dirname, 'temp');
 
-if (!fs.existsSync(tempRoot)) {
-    fs.mkdirSync(tempRoot, { recursive: true });
-}
+  if (!fs.existsSync(tempRoot)) {
+      fs.mkdirSync(tempRoot, { recursive: true });
+  }
 
-function removeFile(filePath) {
-    try {
-        if (fs.existsSync(filePath)) {
-            fs.rmSync(filePath, {
-                recursive: true,
-                force: true
-            });
-        }
-    } catch (err) {
-        console.error('❌ Cleanup error:', err.message);
-    }
-}
+  function removeFile(filePath) {
+      try {
+          if (fs.existsSync(filePath)) {
+              fs.rmSync(filePath, { recursive: true, force: true });
+          }
+      } catch {}
+  }
 
-router.get('/', async (req, res) => {
-    const id = makeid();
-    const sessionDir = path.join(tempRoot, id);
+  router.get('/', async (req, res) => {
+      const id = makeid();
+      const sessionDir = path.join(tempRoot, id);
 
-    let responseSent = false;
-    let finished = false;
-    let reconnecting = false;
-    let sock = null;
+      let responseSent = false;
+      let finished     = false;
+      let reconnecting = false;
+      let sock         = null;
 
-    async function cleanup() {
-        try {
-            if (sock?.ev) {
-                try {
-                    sock.ev.removeAllListeners('connection.update');
-                    sock.ev.removeAllListeners('creds.update');
-                } catch {}
-            }
-            if (sock?.ws) {
-                try {
-                    sock.ws.close();
-                } catch {}
-            }
-        } catch {}
+      function cleanupSync() {
+          try {
+              if (sock?.ev) {
+                  try { sock.ev.removeAllListeners(); } catch {}
+              }
+              if (sock?.ws) {
+                  try { sock.ws.close(); } catch {}
+              }
+          } catch {}
+          removeFile(sessionDir);
+      }
 
-        removeFile(sessionDir);
-    }
+      async function fail(message, status) {
+          if (finished) return;
+          finished = true;
+          cleanupSync();
+          if (!responseSent && !res.headersSent) {
+              res.status(status || 500).json({ code: message });
+              responseSent = true;
+          }
+      }
 
-    async function fail(message, status = 500) {
-        if (finished) return;
-        finished = true;
-        await cleanup();
+      async function startSocket() {
+          if (finished) return;
+          try {
+              if (!fs.existsSync(sessionDir)) {
+                  fs.mkdirSync(sessionDir, { recursive: true });
+              }
 
-        if (!responseSent && !res.headersSent) {
-            res.status(status).json({
-                code: message
-            });
-            responseSent = true;
-        }
-    }
+              const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+              const { version } = await fetchLatestBaileysVersion();
 
-    async function startSocket() {
-        try {
-            if (finished) return;
+              // Remove listeners from previous sock before creating a new one
+              if (sock?.ev) {
+                  try { sock.ev.removeAllListeners('connection.update'); } catch {}
+                  try { sock.ev.removeAllListeners('creds.update'); } catch {}
+              }
 
-            if (!fs.existsSync(sessionDir)) {
-                fs.mkdirSync(sessionDir, { recursive: true });
-            }
+              sock = Toxic_Tech({
+                  version,
+                  auth: {
+                      creds: state.creds,
+                      keys: makeCacheableSignalKeyStore(
+                          state.keys,
+                          pino({ level: 'silent' })
+                      ),
+                  },
+                  printQRInTerminal:          false,
+                  logger:                     pino({ level: 'silent' }),
+                  browser:                    Browsers.macOS('Chrome'),
+                  syncFullHistory:            false,
+                  connectTimeoutMs:           120000,
+                  keepAliveIntervalMs:        10000,
+                  retryRequestDelayMs:        2000,
+                  maxRetries:                 10,
+                  generateHighQualityLinkPreview: true,
+                  markOnlineOnConnect:        false,
+              });
 
-            const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-            const { version } = await fetchLatestBaileysVersion();
+              sock.ev.on('creds.update', saveCreds);
 
-            sock = Toxic_Tech({
-                version,
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(
-                        state.keys,
-                        pino({ level: 'silent' })
-                    ),
-                },
-                printQRInTerminal: false,
-                logger: pino({ level: 'silent' }),
-                browser: Browsers.ubuntu("Chrome"),
-                syncFullHistory: false,
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000,
-                generateHighQualityLinkPreview: true,
-                markOnlineOnConnect: false
-            });
+              sock.ev.on('connection.update', async (update) => {
+                  try {
+                      const { connection, lastDisconnect, qr } = update;
 
-            sock.ev.on('creds.update', saveCreds);
+                      if (finished) return;
 
-            sock.ev.on('connection.update', async (update) => {
-                try {
-                    const { connection, lastDisconnect, qr } = update;
+                      // ── QR ready — send PNG to browser ──────────────────────────
+                      if (qr && !responseSent && !res.headersSent) {
+                          try {
+                              const buf = await QRCode.toBuffer(qr, {
+                                  type: 'png', width: 300, margin: 2,
+                                  color: { dark: '#000000', light: '#ffffff' },
+                                  errorCorrectionLevel: 'M',
+                              });
+                              res.setHeader('Content-Type', 'image/png');
+                              res.setHeader('Cache-Control', 'no-store');
+                              res.end(buf);
+                          } catch {
+                              if (!res.headersSent) res.json({ qr });
+                          }
+                          responseSent = true;
+                      }
 
-                    if (finished) return;
+                      // ── Scan complete ──────────────────────────────────────────
+                      if (connection === 'open') {
+                          // Set finished immediately so no reconnect fires while we send messages
+                          finished = true;
 
-                    if (qr && !responseSent && !res.headersSent) {
-                        const qrBuffer = await QRCode.toBuffer(qr);
-                        res.setHeader('Content-Type', 'image/png');
-                        res.setHeader('Cache-Control', 'no-store');
-                        res.end(qrBuffer);
-                        responseSent = true;
-                    }
+                          try {
+                              await sock.sendMessage(sock.user.id, {
+                                  text: `◈━━━━━━━━━━━◈
+  │❒ Hello! 👋 You're now connected to Toxic-MD.
+  │❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+  ◈━━━━━━━━━━━◈`
+                              });
+                          } catch {}
 
-                    if (connection === 'open') {
-                        console.log(`✅ QR Code connected for session ${id}`);
+                          await delay(5000);
+                          await saveCreds();
+                          await delay(2000);
 
-                        try {
-                            await sock.sendMessage(sock.user.id, {
-                                text: `
-◈━━━━━━━━━━━◈
-│❒ Hello! 👋 You're now connected to Toxic-MD.
-│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
-◈━━━━━━━━━━━◈
-`
-                            });
-                        } catch {
-                            console.log('⚠️ Welcome message skipped');
-                        }
+                          const credsPath = path.join(sessionDir, 'creds.json');
 
-                        await delay(5000);
-                        await saveCreds();
-                        await delay(2000);
+                          if (!fs.existsSync(credsPath)) {
+                              cleanupSync();
+                              return;
+                          }
 
-                        const credsPath = path.join(sessionDir, 'creds.json');
+                          const data = fs.readFileSync(credsPath);
+                          const b64data = Buffer.from(data).toString('base64');
 
-                        if (!fs.existsSync(credsPath)) {
-                            return await fail('Failed to generate creds.json');
-                        }
+                          try {
+                              const session = await sock.sendMessage(sock.user.id, {
+                                  text: b64data
+                              });
 
-                        const data = fs.readFileSync(credsPath);
-                        const b64data = Buffer.from(data).toString('base64');
+                              await sock.sendMessage(
+                                  sock.user.id,
+                                  {
+                                      text: `◈━━━━━━━━━━━◈
+  SESSION CONNECTED
 
-                        const session = await sock.sendMessage(sock.user.id, {
-                            text: b64data
-                        });
+  │❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
 
-                        const Toxic_MD_TEXT = `
-◈━━━━━━━━━━━◈
-SESSION CONNECTED
+  │❒ Need help? Reach out to us:
 
-│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+  『••• Visit For Help •••』
+  > Owner/Developer:
+  _https://wa.me/254114885159_
 
-│❒ Need help? Reach out to us:
+  > WaGroup:
+  _https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
 
-『••• Visit For Help •••』
-> Owner/Developer:
-_https://wa.me/254114885159_
+  > WaChannel:
+  _https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
 
-> WaGroup:
-_https://chat.whatsapp.com/GoXKLVJgTAAC3556FXkfFI_
+  > Instagram:
+  https://www.instagram.com/xh_clinton
 
-> WaChannel:
-_https://whatsapp.com/channel/0029VagJlnG6xCSU2tS1Vz19_
+  > Bot Repo:
+  _https://github.com/xhclintohn/Toxic-MD_
 
-> Instagram:
-https://www.instagram.com/xh_clinton
+  │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
+  ◈━━━━━━━━━━━◈`
+                                  },
+                                  { quoted: session }
+                              );
+                          } catch {}
 
-> Bot Repo:
-_https://github.com/xhclintohn/Toxic-MD_
+                          await delay(1000);
+                          cleanupSync();
+                          return;
+                      }
 
-│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
-◈━━━━━━━━━━━◈`;
+                      // ── Socket closed ──────────────────────────────────────────
+                      if (connection === 'close') {
+                          if (finished) return;
 
-                        await sock.sendMessage(
-                            sock.user.id,
-                            { text: Toxic_MD_TEXT },
-                            { quoted: session }
-                        );
+                          const statusCode =
+                              lastDisconnect?.error?.output?.statusCode ||
+                              lastDisconnect?.error?.statusCode;
 
-                        finished = true;
-                        await delay(1000);
-                        await cleanup();
-                        return;
-                    }
+                          if (statusCode === 401) {
+                              return await fail('Logged out. Please try again.');
+                          }
 
-                    if (connection === 'close') {
-                        const statusCode =
-                            lastDisconnect?.error?.output?.statusCode ||
-                            lastDisconnect?.error?.statusCode;
+                          if (!reconnecting) {
+                              reconnecting = true;
+                              // Code 515 = WhatsApp restart required after scan → reconnect fast
+                              // Any other code → reconnect with short backoff
+                              await delay(statusCode === 515 ? 1000 : 3000);
+                              reconnecting = false;
+                              return startSocket();
+                          }
+                      }
 
-                        if (finished) return;
+                  } catch (err) {
+                      if (!finished) await fail('Service is Currently Unavailable. Please try again.');
+                  }
+              });
 
-                        if (statusCode === 401) {
-                            console.log(`⚠️ Logged out for session ${id}`);
-                            return await fail('Logged out');
-                        }
+          } catch (err) {
+              if (!finished) await fail('Service is Currently Unavailable. Please try again.');
+          }
+      }
 
-                        if (statusCode === 515 && !reconnecting) {
-                            reconnecting = true;
-                            console.log(`🔄 Restart required for session ${id}...`);
-                            try {
-                                if (sock?.ws) sock.ws.close();
-                            } catch {}
-                            await delay(1500);
-                            reconnecting = false;
-                            return startSocket();
-                        }
+      // Overall timeout — if something hangs for 7 minutes, give up
+      const globalTimeout = setTimeout(function () {
+          if (!finished) fail('Request timed out. Please try again.');
+      }, 420000);
 
-                        if (!reconnecting) {
-                            reconnecting = true;
-                            console.log(`🔄 Reconnecting session ${id}...`);
-                            try {
-                                if (sock?.ws) sock.ws.close();
-                            } catch {}
-                            await delay(3000);
-                            reconnecting = false;
-                            return startSocket();
-                        }
-                    }
-                } catch (err) {
-                    console.log(`❌ Connection update error: ${err.message}`);
-                    await fail('Service is Currently Unavailable. Please try again.');
-                }
-            });
-        } catch (err) {
-            console.log('❌ Service error:', err.message);
-            await fail('Service is Currently Unavailable. Please try again.');
-        }
-    }
+      try {
+          await startSocket();
+      } catch {}
 
-    return startSocket();
-});
+      // Clear timeout once startSocket is awaited (it returns immediately on first run)
+      // The actual async work continues via event handlers
+      // globalTimeout keeps watching in case everything stalls
+      return; // response handled by event handlers or fail()
+  });
 
-module.exports = router;
+  module.exports = router;
+  
