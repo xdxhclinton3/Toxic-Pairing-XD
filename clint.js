@@ -6,9 +6,9 @@ const express = require('express');
   let server = require('./qr'),
       code = require('./pair');
   require('events').EventEmitter.defaultMaxListeners = 500;
-  app.use('/qr', server);
+  app.use('/qr/code', server);
   app.use('/code', code);
-  app.use('/qr-page', async (req, res, next) => {
+  app.use('/qr', async (req, res, next) => {
   res.sendFile(__path + '/qr_page.html')
   })
   app.use('/pair', async (req, res, next) => {
