@@ -11,7 +11,7 @@
   "author": "xhclinton",
   "license": "GPL-3.0",
   "dependencies": {
-    "@whiskeysockets/baileys": "npm:toxic-baileys@1.0.6",
+    "@whiskeysockets/baileys": "latest",
     "qrcode": "^1.5.4",
     "awesome-phonenumber": "^7.8.0",
     "pino": "^10.1.0",
