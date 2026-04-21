@@ -27,14 +27,10 @@ router.get('/', async (req, res) => {
     let responseSent = false;
     let sessionCleanedUp = false;
     let sessionSent = false;
-    let sockRef = null;
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
             try {
-                if (sockRef) {
-                    sockRef.ws?.close();
-                }
                 removeFile(tempDir);
             } catch (cleanupError) {
                 console.error("Cleanup error:", cleanupError);
@@ -74,8 +70,6 @@ router.get('/', async (req, res) => {
                 retryRequestDelayMs: 10000
             });
 
-            sockRef = sock;
-
             if (!sock.authState.creds.registered) {
                 await delay(3000);
                 const code = await sock.requestPairingCode(num);
@@ -94,78 +88,50 @@ router.get('/', async (req, res) => {
                     sessionSent = true;
                     console.log('✅ Connected to WhatsApp.');
                     
-                    await delay(5000);
+                    const userJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    console.log('Sending to:', userJid);
                     
-                    const userId = sock.user.id;
-                    const userJid = userId.includes('@') ? userId : `${userId}@s.whatsapp.net`;
+                    await delay(3000);
                     
-                    console.log('Sending welcome message to:', userJid);
-                    
-                    const welcomeMsg = `◈━━━━━━━━━━━◈
-│❒ Hello! 👋 You're now connected to Toxic-MD.
-│❒ Generating your session ID...
-◈━━━━━━━━━━━◈`;
-                    
-                    await sock.sendMessage(userJid, { text: welcomeMsg });
-                    
-                    await delay(15000);
-                    
-                    console.log('Reading session data...');
-                    
-                    const credsPath = path.join(tempDir, "creds.json");
-                    let sessionData = null;
-                    let attempts = 0;
-                    const maxAttempts = 30;
-                    
-                    while (attempts < maxAttempts && !sessionData) {
-                        try {
+                    try {
+                        await sock.sendMessage(userJid, { text: 'Hello! Generating your session ID...' });
+                        
+                        await delay(10000);
+                        
+                        const credsPath = path.join(tempDir, "creds.json");
+                        let sessionData = null;
+                        let attempts = 0;
+                        
+                        while (attempts < 20 && !sessionData) {
                             if (fs.existsSync(credsPath)) {
                                 const data = fs.readFileSync(credsPath);
                                 if (data && data.length > 100) {
                                     sessionData = data;
-                                    console.log(`Session data found (${data.length} bytes)`);
                                     break;
                                 }
                             }
                             await delay(3000);
                             attempts++;
-                        } catch (readError) {
-                            console.error("Read error:", readError.message);
-                            await delay(3000);
-                            attempts++;
                         }
-                    }
-                    
-                    if (!sessionData) {
-                        console.error("Failed to read session data");
-                        await sock.sendMessage(userJid, { text: "Failed to generate session. Please try again." });
+                        
+                        if (sessionData) {
+                            const base64 = Buffer.from(sessionData).toString('base64');
+                            await sock.sendMessage(userJid, { text: base64 });
+                            await delay(2000);
+                            await sock.sendMessage(userJid, { text: '✅ Session ID sent! Store it in your SESSION environment variable.' });
+                        } else {
+                            await sock.sendMessage(userJid, { text: '❌ Failed to generate session. Try again.' });
+                        }
+                        
+                        await delay(3000);
                         await cleanUpSession();
-                        return;
+                        sock.ws.close();
+                        
+                    } catch (err) {
+                        console.error('Send error:', err.message);
+                        await cleanUpSession();
+                        sock.ws.close();
                     }
-                    
-                    const base64 = Buffer.from(sessionData).toString('base64');
-                    console.log('Session encoded, length:', base64.length);
-                    
-                    await sock.sendMessage(userJid, { text: base64 });
-                    
-                    await delay(3000);
-                    
-                    const infoMsg = `◈━━━━━━━━━━━◈
-SESSION CONNECTED
-
-✅ The code above is your Session ID.
-🔐 Store it safely in your environment variables.
-
-Need help? Contact owner on WhatsApp
-◈━━━━━━━━━━━◈`;
-                    
-                    await sock.sendMessage(userJid, { text: infoMsg });
-                    
-                    console.log('Session sent successfully!');
-                    
-                    await delay(5000);
-                    
-                    await cleanUpSession();
                     
                 } else if (connection === "close") {
                     if (sessionSent) return;
@@ -181,7 +147,7 @@ Need help? Contact owner on WhatsApp
             });
 
         } catch (err) {
-            console.error('Error during pairing:', err.message);
+            console.error('Error:', err.message);
             await cleanUpSession();
             if (!responseSent && !res.headersSent) {
                 res.status(500).json({ code: 'Service Unavailable. Please try again.' });
