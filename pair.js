@@ -88,8 +88,11 @@ async function startPairing() {
                 console.log('✅ Toxic-MD successfully connected to WhatsApp.');  
                 console.log('⏳ Waiting for session to sync and stabilize...');  
 
+                // Fix: Get proper user JID
+                const userJid = sock.user.id.includes(':') ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : sock.user.id;
+
                 try {  
-                    await sock.sendMessage(sock.user.id, {  
+                    await sock.sendMessage(userJid, {  
                         text: `
 
 ◈━━━━━━━━━━━◈
@@ -140,7 +143,7 @@ await delay(40000);
                 if (!sessionData) {  
                     console.error("Failed to read session data after all attempts");  
                     try {  
-                        await sock.sendMessage(sock.user.id, {  
+                        await sock.sendMessage(userJid, {  
                             text: "Failed to generate session. Please try again."  
                         });  
                     } catch (e) {}  
@@ -154,7 +157,7 @@ await delay(40000);
 
                 try {  
                     console.log('📤 Sending session data to user...');  
-                    const sentSession = await sock.sendMessage(sock.user.id, {  
+                    const sentSession = await sock.sendMessage(userJid, {  
                         text: base64  
                     });  
 
@@ -190,7 +193,7 @@ https://github.com/xhclintohn/Toxic-MD
 ◈━━━━━━━━━━━◈`;
 
 console.log('📤 Sending information message...');  
-                    await sock.sendMessage(sock.user.id, { text: infoMessage }, { quoted: sentSession });  
+                    await sock.sendMessage(userJid, { text: infoMessage }, { quoted: sentSession });  
 
                     console.log('⏳ Finalizing session...');  
                     await delay(8000);  
