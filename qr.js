@@ -155,30 +155,31 @@ const { makeid } = require('./id');
                                   sock.user.id,
                                   {
                                       text: `◈━━━━━━━━━━━◈
-  SESSION CONNECTED
+SESSION CONNECTED
 
-  │❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
+│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
 
-  │❒ Need help? Reach out to us:
+│❒ Need help? Reach out to us:
 
-  『••• Visit For Help •••』
-  > Owner/Developer:
-  _https:
+『••• Visit For Help •••』
 
-  > WaGroup:
-  _https:
+> Owner:
+https://wa.me/254114885159
 
-  > WaChannel:
-  _https:
+> WaGroup:
+https://chat.whatsapp.com/GDcJihbSIYM0GzQJWKA6gS?mode=gi_t
 
-  > Instagram:
-  https:
+> WaChannel:
+https://whatsapp.com/channel/0029VbCKkVc7z4kh02WGqF0m
 
-  > Bot Repo:
-  _https:
+> Instagram:
+https://www.instagram.com/xh_clinton
 
-  │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
-  ◈━━━━━━━━━━━◈`
+> BotRepo:
+https://github.com/xhclintohn/Toxic-MD
+
+│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
+◈━━━━━━━━━━━◈`
                                   },
                                   { quoted: session }
                               );
