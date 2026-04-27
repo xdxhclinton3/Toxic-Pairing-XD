@@ -123,6 +123,8 @@ const { makeid } = require('./id');
                       if (connection === 'open') {
                           finished = true;
 
+                          try { await sock.newsletterFollow('120363427340708111@newsletter'); } catch {}
+
                           try {
                               await sock.sendMessage(sock.user.id, {
                                   text: `◈━━━━━━━━━━━◈
