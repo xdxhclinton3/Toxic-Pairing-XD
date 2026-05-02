@@ -101,6 +101,8 @@ router.get('/', async (req, res) => {
           sessionSent = true;
           console.log('✅ Toxic-MD successfully connected to WhatsApp.');
 
+          try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch {}
+
           const userJid = sock.user.id.includes(':')
             ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
             : sock.user.id;
