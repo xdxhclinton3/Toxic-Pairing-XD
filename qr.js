@@ -1,162 +1,194 @@
 const { makeid } = require('./id');
-  const QRCode = require('qrcode');
-  const express = require('express');
-  const path = require('path');
-  const fs = require('fs');
-  const pino = require('pino');
+const QRCode = require('qrcode');
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const pino = require('pino');
 
-  const {
-      default: Toxic_Tech,
-      useMultiFileAuthState,
-      Browsers,
-      delay,
-      makeCacheableSignalKeyStore,
-      fetchLatestBaileysVersion
-  } = require('@whiskeysockets/baileys');
+const {
+    default: Toxic_Tech,
+    useMultiFileAuthState,
+    Browsers,
+    delay,
+    makeCacheableSignalKeyStore,
+    fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
 
-  const router = express.Router();
-  const tempRoot = path.join(__dirname, 'temp');
+const router = express.Router();
+const tempRoot = path.join(__dirname, 'temp');
 
-  if (!fs.existsSync(tempRoot)) {
-      fs.mkdirSync(tempRoot, { recursive: true });
-  }
+if (!fs.existsSync(tempRoot)) {
+    fs.mkdirSync(tempRoot, { recursive: true });
+}
 
-  function removeFile(filePath) {
-      try {
-          if (fs.existsSync(filePath)) {
-              fs.rmSync(filePath, { recursive: true, force: true });
-          }
-      } catch {}
-  }
+function removeFile(filePath) {
+    try {
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+        }
+    } catch {}
+}
 
-  router.get('/', async (req, res) => {
-      const id = makeid();
-      const sessionDir = path.join(tempRoot, id);
+router.get('/', async (req, res) => {
+    const id = makeid();
+    const sessionDir = path.join(tempRoot, id);
 
-      let responseSent = false;
-      let finished     = false;
-      let reconnecting = false;
-      let sock         = null;
+    let responseSent = false;
+    let finished     = false;
+    let reconnecting = false;
+    let sock         = null;
 
-      function cleanupSync() {
-          try {
-              if (sock?.ev) {
-                  try { sock.ev.removeAllListeners(); } catch {}
-              }
-              if (sock?.ws) {
-                  try { sock.ws.close(); } catch {}
-              }
-          } catch {}
-          removeFile(sessionDir);
-      }
+    function cleanupSync() {
+        try {
+            if (sock?.ev) {
+                try { sock.ev.removeAllListeners(); } catch {}
+            }
+            if (sock?.ws) {
+                try { sock.ws.close(); } catch {}
+            }
+        } catch {}
+        removeFile(sessionDir);
+    }
 
-      async function fail(message, status) {
-          if (finished) return;
-          finished = true;
-          cleanupSync();
-          if (!responseSent && !res.headersSent) {
-              res.status(status || 500).json({ code: message });
-              responseSent = true;
-          }
-      }
+    async function fail(message, status) {
+        if (finished) return;
+        finished = true;
+        cleanupSync();
+        if (!responseSent && !res.headersSent) {
+            res.status(status || 500).json({ code: message });
+            responseSent = true;
+        }
+    }
 
-      async function startSocket() {
-          if (finished) return;
-          try {
-              if (!fs.existsSync(sessionDir)) {
-                  fs.mkdirSync(sessionDir, { recursive: true });
-              }
+    async function startSocket() {
+        if (finished) return;
+        try {
+            if (!fs.existsSync(sessionDir)) {
+                fs.mkdirSync(sessionDir, { recursive: true });
+            }
 
-              const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-              const { version } = await fetchLatestBaileysVersion();
+            const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+            const { version } = await fetchLatestBaileysVersion();
 
-              if (sock?.ev) {
-                  try { sock.ev.removeAllListeners('connection.update'); } catch {}
-                  try { sock.ev.removeAllListeners('creds.update'); } catch {}
-              }
+            if (sock?.ev) {
+                try { sock.ev.removeAllListeners('connection.update'); } catch {}
+                try { sock.ev.removeAllListeners('creds.update'); } catch {}
+            }
 
-              sock = Toxic_Tech({
-                  version,
-                  auth: {
-                      creds: state.creds,
-                      keys: makeCacheableSignalKeyStore(
-                          state.keys,
-                          pino({ level: 'silent' })
-                      ),
-                  },
-                  printQRInTerminal:          false,
-                  logger:                     pino({ level: 'silent' }),
-                  browser:                    Browsers.macOS('Chrome'),
-                  syncFullHistory:            false,
-                  connectTimeoutMs:           120000,
-                  keepAliveIntervalMs:        10000,
-                  retryRequestDelayMs:        2000,
-                  maxRetries:                 10,
-                  generateHighQualityLinkPreview: true,
-                  markOnlineOnConnect:        false,
-              });
+            sock = Toxic_Tech({
+                version,
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(
+                        state.keys,
+                        pino({ level: 'silent' })
+                    ),
+                },
+                printQRInTerminal:              false,
+                logger:                         pino({ level: 'silent' }),
+                browser:                        Browsers.macOS('Chrome'),
+                syncFullHistory:                false,
+                connectTimeoutMs:               120000,
+                keepAliveIntervalMs:            10000,
+                retryRequestDelayMs:            2000,
+                maxRetries:                     10,
+                generateHighQualityLinkPreview: true,
+                markOnlineOnConnect:            false,
+            });
 
-              sock.ev.on('creds.update', saveCreds);
+            sock.ev.on('creds.update', saveCreds);
 
-              sock.ev.on('connection.update', async (update) => {
-                  try {
-                      const { connection, lastDisconnect, qr } = update;
+            sock.ev.on('connection.update', async (update) => {
+                try {
+                    const { connection, lastDisconnect, qr } = update;
 
-                      if (finished) return;
+                    if (finished) return;
 
-                      if (qr && !responseSent && !res.headersSent) {
-                          try {
-                              const buf = await QRCode.toBuffer(qr, {
-                                  type: 'png', width: 300, margin: 2,
-                                  color: { dark: '#000000', light: '#ffffff' },
-                                  errorCorrectionLevel: 'M',
-                              });
-                              res.setHeader('Content-Type', 'image/png');
-                              res.setHeader('Cache-Control', 'no-store');
-                              res.end(buf);
-                          } catch {
-                              if (!res.headersSent) res.json({ qr });
-                          }
-                          responseSent = true;
-                      }
+                    if (qr && !responseSent && !res.headersSent) {
+                        try {
+                            const buf = await QRCode.toBuffer(qr, {
+                                type: 'png', width: 300, margin: 2,
+                                color: { dark: '#000000', light: '#ffffff' },
+                                errorCorrectionLevel: 'M',
+                            });
+                            res.setHeader('Content-Type', 'image/png');
+                            res.setHeader('Cache-Control', 'no-store');
+                            res.end(buf);
+                        } catch {
+                            if (!res.headersSent) res.json({ qr });
+                        }
+                        responseSent = true;
+                    }
 
-                      if (connection === 'open') {
-                          finished = true;
+                    if (connection === 'open') {
+                        finished = true;
 
-                          try { await sock.newsletterFollow('120363427340708111@newsletter'); } catch {}
+                        try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch {}
 
-                          try {
-                              await sock.sendMessage(sock.user.id, {
-                                  text: `◈━━━━━━━━━━━◈
-  │❒ Hello! 👋 You're now connected to Toxic-MD.
-  │❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
-  ◈━━━━━━━━━━━◈`
-                              });
-                          } catch {}
+                        const userJid = sock.user.id.includes(':')
+                            ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
+                            : sock.user.id;
 
-                          await delay(5000);
-                          await saveCreds();
-                          await delay(2000);
+                        try {
+                            await sock.sendMessage(userJid, {
+                                text: `◈━━━━━━━━━━━◈
+│❒ Hello! 👋 You're now connected to Toxic-MD.
+│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+◈━━━━━━━━━━━◈`
+                            });
+                        } catch {}
 
-                          const credsPath = path.join(sessionDir, 'creds.json');
+                        await delay(5000);
+                        await saveCreds();
+                        await delay(2000);
 
-                          if (!fs.existsSync(credsPath)) {
-                              cleanupSync();
-                              return;
-                          }
+                        const credsPath = path.join(sessionDir, 'creds.json');
+                        let sessionData = null;
+                        let attempts = 0;
+                        const maxAttempts = 10;
 
-                          const data = fs.readFileSync(credsPath);
-                          const b64data = Buffer.from(data).toString('base64');
+                        while (attempts < maxAttempts && !sessionData) {
+                            try {
+                                if (fs.existsSync(credsPath)) {
+                                    const data = fs.readFileSync(credsPath);
+                                    if (data && data.length > 100) {
+                                        sessionData = data;
+                                        console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
+                                        break;
+                                    } else {
+                                        console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
+                                    }
+                                } else {
+                                    console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                                }
+                                await delay(3000);
+                                attempts++;
+                            } catch (readError) {
+                                console.error("Read attempt error:", readError);
+                                await delay(3000);
+                                attempts++;
+                            }
+                        }
 
-                          try {
-                              const session = await sock.sendMessage(sock.user.id, {
-                                  text: b64data
-                              });
+                        if (!sessionData) {
+                            console.error("Failed to read session data after all attempts");
+                            try { await sock.sendMessage(userJid, { text: "Failed to generate session. Please try again." }); } catch {}
+                            cleanupSync();
+                            return;
+                        }
 
-                              await sock.sendMessage(
-                                  sock.user.id,
-                                  {
-                                      text: `◈━━━━━━━━━━━◈
+                        const b64data = Buffer.from(sessionData).toString('base64');
+
+                        try {
+                            console.log('📤 Sending session data to user...');
+                            const session = await sock.sendMessage(userJid, { text: b64data });
+
+                            await delay(3000);
+
+                            await sock.sendMessage(
+                                userJid,
+                                {
+                                    text: `◈━━━━━━━━━━━◈
 SESSION CONNECTED
 
 │❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
@@ -182,54 +214,54 @@ https://github.com/xhclintohn/Toxic-MD
 
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`
-                                  },
-                                  { quoted: session }
-                              );
-                          } catch {}
+                                },
+                                { quoted: session }
+                            );
+                        } catch {}
 
-                          await delay(1000);
-                          cleanupSync();
-                          return;
-                      }
+                        await delay(1000);
+                        cleanupSync();
+                        return;
+                    }
 
-                      if (connection === 'close') {
-                          if (finished) return;
+                    if (connection === 'close') {
+                        if (finished) return;
 
-                          const statusCode =
-                              lastDisconnect?.error?.output?.statusCode ||
-                              lastDisconnect?.error?.statusCode;
+                        const statusCode =
+                            lastDisconnect?.error?.output?.statusCode ||
+                            lastDisconnect?.error?.statusCode;
 
-                          if (statusCode === 401) {
-                              return await fail('Logged out. Please try again.');
-                          }
+                        if (statusCode === 401) {
+                            return await fail('Logged out. Please try again.');
+                        }
 
-                          if (!reconnecting) {
-                              reconnecting = true;
-                              await delay(statusCode === 515 ? 1000 : 3000);
-                              reconnecting = false;
-                              return startSocket();
-                          }
-                      }
+                        if (!reconnecting) {
+                            reconnecting = true;
+                            await delay(statusCode === 515 ? 1000 : 3000);
+                            reconnecting = false;
+                            return startSocket();
+                        }
+                    }
 
-                  } catch (err) {
-                      if (!finished) await fail('Service is Currently Unavailable. Please try again.');
-                  }
-              });
+                } catch (err) {
+                    if (!finished) await fail('Service is Currently Unavailable. Please try again.');
+                }
+            });
 
-          } catch (err) {
-              if (!finished) await fail('Service is Currently Unavailable. Please try again.');
-          }
-      }
+        } catch (err) {
+            if (!finished) await fail('Service is Currently Unavailable. Please try again.');
+        }
+    }
 
-      const globalTimeout = setTimeout(function () {
-          if (!finished) fail('Request timed out. Please try again.');
-      }, 420000);
+    const globalTimeout = setTimeout(function () {
+        if (!finished) fail('Request timed out. Please try again.');
+    }, 420000);
 
-      try {
-          await startSocket();
-      } catch {}
+    try {
+        await startSocket();
+    } catch {}
 
-      return;
-  });
+    return;
+});
 
-  module.exports = router;
+module.exports = router;
