@@ -11,7 +11,9 @@ const {
     Browsers,
     delay,
     makeCacheableSignalKeyStore,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
+    generateWAMessageFromContent,
+    proto
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -159,7 +161,7 @@ router.get('/', async (req, res) => {
                                         console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
                                     }
                                 } else {
-                                    console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                                    console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
                                 }
                                 await delay(3000);
                                 attempts++;
@@ -181,7 +183,22 @@ router.get('/', async (req, res) => {
 
                         try {
                             console.log('📤 Sending session data to user...');
-                            const session = await sock.sendMessage(userJid, { text: b64data });
+                            const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
+                                interactiveMessage: {
+                                    body: { text: b64data },
+                                    footer: { text: '' },
+                                    nativeFlowMessage: {
+                                        messageVersion: 1,
+                                        buttons: [{
+                                            name: 'cta_copy',
+                                            buttonParamsJson: JSON.stringify({ display_text: 'Copy Session id', copy_code: b64data })
+                                        }],
+                                        messageParamsJson: ''
+                                    }
+                                }
+                            }), { userJid: sock.user.id });
+
+                            const sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
 
                             await delay(3000);
 
@@ -215,9 +232,15 @@ https://github.com/xhclintohn/Toxic-MD
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`
                                 },
-                                { quoted: session }
+                                { quoted: sentSession }
                             );
-                        } catch {}
+                        } catch (sendError) {
+                            console.error("Error sending session:", sendError);
+                            try {
+                                const fallback = await sock.sendMessage(userJid, { text: b64data });
+                                await sock.sendMessage(userJid, { text: `◈━━━━━━━━━━━◈\nSESSION CONNECTED\n\n│❒ The long code above is your Session ID...` }, { quoted: fallback });
+                            } catch {}
+                        }
 
                         await delay(1000);
                         cleanupSync();
