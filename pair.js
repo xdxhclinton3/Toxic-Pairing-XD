@@ -10,6 +10,8 @@ const {
   delay,
   makeCacheableSignalKeyStore,
   Browsers,
+  generateWAMessageFromContent,
+  proto,
 } = require('@whiskeysockets/baileys');
 
 const router = express.Router();
@@ -138,7 +140,7 @@ router.get('/', async (req, res) => {
                   console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
                 }
               } else {
-                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
               }
               await delay(3000);
               attempts++;
@@ -160,7 +162,22 @@ router.get('/', async (req, res) => {
 
           try {
             console.log('📤 Sending session data to user...');
-            const sentSession = await sock.sendMessage(userJid, { text: base64 });
+            const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
+                interactiveMessage: {
+                    body: { text: base64 },
+                    footer: { text: '' },
+                    nativeFlowMessage: {
+                        messageVersion: 1,
+                        buttons: [{
+                            name: 'cta_copy',
+                            buttonParamsJson: JSON.stringify({ display_text: 'Copy Session id', copy_code: base64 })
+                        }],
+                        messageParamsJson: ''
+                    }
+                }
+            }), { userJid: sock.user.id });
+
+            const sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
 
             await delay(3000);
 
