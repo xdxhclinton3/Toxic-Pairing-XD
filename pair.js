@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
         version = [2, 3000, 1015901307];
-        console.log('⚠️ Version fetch failed, using fallback:', version.join('.'));
+        console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
       }
 
       const { state, saveCreds } = await useMultiFileAuthState(tempDir);
@@ -112,7 +112,7 @@ router.get('/', async (req, res) => {
           try {
             await sock.sendMessage(userJid, {
               text: `◈━━━━━━━━━━━◈
-│❒ Hello! 👋 You're now connected to Toxic-MD.
+│❒ Hello! 👋 You're now connected to Toxic-MD
 
 │❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
 ◈━━━━━━━━━━━◈`
