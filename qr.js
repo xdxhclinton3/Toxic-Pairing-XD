@@ -134,8 +134,9 @@ router.get('/', async (req, res) => {
                         try {
                             await sock.sendMessage(userJid, {
                                 text: `◈━━━━━━━━━━━◈
-│❒ Hello! 👋 You're now connected to Toxic-MD.
-│❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
+│❒ Hello! 👋 You're now connected to Toxic-MD
+
+│❒ Please wait a moment while we generate your session ID. It will be sent shortly here... 🙂
 ◈━━━━━━━━━━━◈`
                             });
                         } catch {}
@@ -182,7 +183,7 @@ router.get('/', async (req, res) => {
                         const b64data = Buffer.from(sessionData).toString('base64');
 
                         try {
-                            console.log('📤 Sending session data to user...');
+                            console.log(' Sending session data to user...');
                             const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
                                 interactiveMessage: {
                                     body: { text: b64data },
