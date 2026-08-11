@@ -1,0 +1,22 @@
+{
+    "name": "Toxic-MD Pairing",
+    "description": "Toxic-MD WA bot, Created by xhclinton",
+    "logo": "https://raw.githubusercontent.com/xhclintohn/Music-Clips-Collection/main/images/toxicx.png",
+    "repository": "https://github.com/xhclintohn/TOXIC-PAIR-CODE",
+    "keywords": ["Nvm"],
+    "success_url": "/", 
+    "buildpacks": [{ "url": "https://github.com/heroku/heroku-buildpack-nodejs#latest" } ],
+    "env": {      
+      "PORT": {
+        "description": "Port for web app.4000,5000,3000... any!",
+        "value": "5000",
+        "required": false 
+      },
+      "MESSAGE": {
+        "description": "set session id conformation message",
+        "value": "",
+        "required": false 
+      }
+    }   
+
+}
