@@ -16,7 +16,7 @@
     "awesome-phonenumber": "^7.8.0",
     "pino": "^10.1.0",
     "phone": "3.1.30",
-    "jimp": "^1.6.0",
+    "jimp": "latest",
     "lodash": "^4.17.21",
     "body-parser": "^2.2.2",
     "express": "^5.1.0",
