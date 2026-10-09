@@ -1,6 +1,4 @@
 const express = require('express');
-const os = require('os');
-const v8 = require('v8');
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
@@ -14,28 +12,40 @@ const {
   Browsers,
   generateWAMessageFromContent,
   proto,
+  DisconnectReason,
 } = require('@whiskeysockets/baileys');
 
-
-function resolveBrowserDescriptor() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Mac OS";
-  if (platform === "win32") return "Windows";
-  if (platform === "linux") return "Ubuntu";
-  return os.type();
-}
-function resolveBrowserName() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Safari";
-  if (platform === "win32") return "Edge";
-  return "Chrome";
-}
-
 const router = express.Router();
-const sessionDir = path.join(__dirname, "temp");
+const sessionDir = path.join(__dirname, 'temp');
 
 function removeFile(filePath) {
   if (fs.existsSync(filePath)) fs.rmSync(filePath, { recursive: true, force: true });
+}
+
+async function waitUntilSocketOpen(sock, timeoutMs = 60000) {
+  if (sock.ws?.isOpen) return;
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      sock.ev.off('connection.update', onUpdate);
+      reject(new Error('Socket open timeout'));
+    }, timeoutMs);
+
+    const onUpdate = (u) => {
+      if (sock.ws?.isOpen || u.connection === 'open' || u.qr) {
+        clearTimeout(t);
+        sock.ev.off('connection.update', onUpdate);
+        resolve();
+        return;
+      }
+      if (u.connection === 'close') {
+        clearTimeout(t);
+        sock.ev.off('connection.update', onUpdate);
+        reject(u.lastDisconnect?.error || new Error('Connection closed before open'));
+      }
+    };
+
+    sock.ev.on('connection.update', onUpdate);
+  });
 }
 
 router.get('/', async (req, res) => {
@@ -46,6 +56,7 @@ router.get('/', async (req, res) => {
   let sessionCleanedUp = false;
   let sessionSent = false;
   let currentSock = null;
+  let reconnecting = false;
 
   if (!num || num.length < 7) {
     return res.status(400).json({ code: 'Please provide a valid phone number.' });
@@ -53,8 +64,11 @@ router.get('/', async (req, res) => {
 
   async function cleanUpSession() {
     if (!sessionCleanedUp) {
-      try { removeFile(tempDir); } catch (e) { console.error("Cleanup error:", e); }
+      try { removeFile(tempDir); } catch (e) { console.error('Cleanup error:', e); }
       sessionCleanedUp = true;
+    }
+    if (currentSock?.ev) {
+      try { currentSock.ev.removeAllListeners(); } catch {}
     }
     if (currentSock?.ws) {
       try { currentSock.ws.close(); } catch {}
@@ -65,12 +79,20 @@ router.get('/', async (req, res) => {
     try {
       let version;
       try {
-        version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
+        version = (
+          await (
+            await fetch(
+              'https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json'
+            )
+          ).json()
+        ).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
-        version = [2, 3000, 1015901307];
-        console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
+        version = [2, 3000, 1049110567];
+        console.log('Version fetch failed, using fallback:', version.join('.'));
       }
+
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
       const { state, saveCreds } = await useMultiFileAuthState(tempDir);
 
@@ -80,36 +102,27 @@ router.get('/', async (req, res) => {
         printQRInTerminal: false,
         auth: {
           creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+          keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
         },
-        browser: [resolveBrowserDescriptor(), resolveBrowserName(), String(v8.cachedDataVersionTag())],
+        browser: Browsers.ubuntu('Chrome'),
         syncFullHistory: false,
         generateHighQualityLinkPreview: true,
-        shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
+        shouldIgnoreJid: (jid) => !!jid?.endsWith('@g.us'),
         getMessage: async () => undefined,
-        markOnlineOnConnect: true,
+        markOnlineOnConnect: false,
         connectTimeoutMs: 120000,
         keepAliveIntervalMs: 30000,
         emitOwnEvents: true,
-        fireInitQueries: true,
+        fireInitQueries: false,
         defaultQueryTimeoutMs: 60000,
         retryRequestDelayMs: 2000,
         transactionOpts: {
           maxCommitRetries: 10,
-          delayBetweenTriesMs: 3000
-        }
+          delayBetweenTriesMs: 3000,
+        },
       });
 
       currentSock = sock;
-
-      if (!state.creds.registered) {
-        await delay(3000);
-        const code = await sock.requestPairingCode(num);
-        if (!responseSent && !res.headersSent) {
-          res.json({ code });
-          responseSent = true;
-        }
-      }
 
       sock.ev.on('creds.update', saveCreds);
 
@@ -118,9 +131,11 @@ router.get('/', async (req, res) => {
 
         if (connection === 'open') {
           sessionSent = true;
-          console.log('✅ Toxic-MD successfully connected to WhatsApp.');
+          console.log('Toxic-MD successfully connected to WhatsApp.');
 
-          try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch {}
+          try {
+            await sock.newsletterFollow('120363425667150709@newsletter');
+          } catch {}
 
           const userJid = sock.user.id.includes(':')
             ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
@@ -132,7 +147,7 @@ router.get('/', async (req, res) => {
 │❒ Hello! 👋 You're now connected to Toxic-MD
 
 │❒ Please wait a moment while we generate your session ID. It will be sent shortly... 🙂
-◈━━━━━━━━━━━◈`
+◈━━━━━━━━━━━◈`,
             });
           } catch {}
 
@@ -140,7 +155,7 @@ router.get('/', async (req, res) => {
           await saveCreds();
           await delay(2000);
 
-          const credsPath = path.join(tempDir, "creds.json");
+          const credsPath = path.join(tempDir, 'creds.json');
           let sessionData = null;
           let attempts = 0;
           const maxAttempts = 10;
@@ -151,26 +166,24 @@ router.get('/', async (req, res) => {
                 const data = fs.readFileSync(credsPath);
                 if (data && data.length > 100) {
                   sessionData = data;
-                  console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
+                  console.log(`Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
                   break;
-                } else {
-                  console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
                 }
-              } else {
-                console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
               }
               await delay(3000);
               attempts++;
             } catch (readError) {
-              console.error("Read attempt error:", readError);
+              console.error('Read attempt error:', readError);
               await delay(3000);
               attempts++;
             }
           }
 
           if (!sessionData) {
-            console.error("Failed to read session data after all attempts");
-            try { await sock.sendMessage(userJid, { text: "Failed to generate session. Please try again." }); } catch {}
+            console.error('Failed to read session data after all attempts');
+            try {
+              await sock.sendMessage(userJid, { text: 'Failed to generate session. Please try again.' });
+            } catch {}
             await cleanUpSession();
             return;
           }
@@ -178,28 +191,41 @@ router.get('/', async (req, res) => {
           const base64 = Buffer.from(sessionData).toString('base64');
 
           try {
-            console.log('📤 Sending session data to user...');
-            const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
+            console.log('Sending session data to user...');
+            const sessionMsg = await generateWAMessageFromContent(
+              userJid,
+              proto.Message.fromObject({
                 interactiveMessage: {
-                    body: { text: base64 },
-                    footer: { text: '' },
-                    nativeFlowMessage: {
-                        messageVersion: 1,
-                        buttons: [{
-                            name: 'cta_copy',
-                            buttonParamsJson: JSON.stringify({ display_text: 'Copy Session id', copy_code: base64 })
-                        }],
-                        messageParamsJson: ''
-                    }
-                }
-            }), { userJid: sock.user.id });
+                  body: { text: base64 },
+                  footer: { text: '' },
+                  nativeFlowMessage: {
+                    messageVersion: 1,
+                    buttons: [
+                      {
+                        name: 'cta_copy',
+                        buttonParamsJson: JSON.stringify({
+                          display_text: 'Copy Session id',
+                          copy_code: base64,
+                        }),
+                      },
+                    ],
+                    messageParamsJson: '',
+                  },
+                },
+              }),
+              { userJid: sock.user.id }
+            );
 
-            const sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
+            const sentSession = await sock.relayMessage(userJid, sessionMsg.message, {
+              messageId: sessionMsg.key.id,
+            });
 
             await delay(3000);
 
-            await sock.sendMessage(userJid, {
-              text: `◈━━━━━━━━━━━◈
+            await sock.sendMessage(
+              userJid,
+              {
+                text: `◈━━━━━━━━━━━◈
 SESSION CONNECTED
 
 │❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! 🔐
@@ -224,32 +250,53 @@ https://www.instagram.com/xh_clinton
 https://github.com/xhclintohn/Toxic-MD
 
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
-◈━━━━━━━━━━━◈`
-            }, { quoted: sentSession });
+◈━━━━━━━━━━━◈`,
+              },
+              { quoted: sentSession }
+            );
 
             await delay(5000);
             await cleanUpSession();
           } catch (sendError) {
-            console.error("Error sending session:", sendError);
+            console.error('Error sending session:', sendError);
             await cleanUpSession();
           }
-
         } else if (connection === 'close') {
           if (sessionSent) return;
-          const statusCode = lastDisconnect?.error?.output?.statusCode;
-          if (statusCode === 401) {
-            console.log('❌ Connection closed permanently (logged out)');
+
+          const statusCode =
+            lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
+
+          if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+            console.log('Connection closed permanently (logged out)');
             await cleanUpSession();
-          } else {
-            console.log('⚠️ Connection closed, reconnecting...');
-            await delay(3000);
-            await startPairing();
+            if (!responseSent && !res.headersSent) {
+              res.status(401).json({ code: 'Logged out. Please try again.' });
+              responseSent = true;
+            }
+            return;
           }
+
+          if (reconnecting) return;
+          reconnecting = true;
+          console.log('Connection closed, reconnecting...', statusCode);
+          await delay(statusCode === 515 ? 1000 : 3000);
+          reconnecting = false;
+          await startPairing();
         }
       });
 
+      if (!state.creds.registered) {
+        await waitUntilSocketOpen(sock, 90000);
+        await delay(500);
+        const code = await sock.requestPairingCode(num);
+        if (!responseSent && !res.headersSent) {
+          res.json({ code });
+          responseSent = true;
+        }
+      }
     } catch (err) {
-      console.error('❌ Error during pairing:', err);
+      console.error('Error during pairing:', err);
       await cleanUpSession();
       if (!responseSent && !res.headersSent) {
         res.status(500).json({ code: 'Service Unavailable. Please try again.' });
@@ -259,16 +306,16 @@ https://github.com/xhclintohn/Toxic-MD
   }
 
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("Pairing process timeout")), 420000);
+    setTimeout(() => reject(new Error('Pairing process timeout')), 420000);
   });
 
   try {
     await Promise.race([startPairing(), timeoutPromise]);
   } catch (finalError) {
-    console.error("Final error:", finalError);
+    console.error('Final error:', finalError);
     await cleanUpSession();
     if (!responseSent && !res.headersSent) {
-      res.status(500).json({ code: "Service Error - Timeout" });
+      res.status(500).json({ code: 'Service Error - Timeout' });
     }
   }
 });
