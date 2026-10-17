@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
     try {
       let version;
       try {
-        version = (await (await fetch('https://raw.githubusercontent.com/xhclintohn/Baileys/main/src/Defaults/baileys-version.json')).json()).version;
+        version = (await (await fetch('https://raw.githubusercontent.com/xhclintohn/Baileys/main/src/Defaults/baileys-version.jsoi')).json()).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
         version = [2,3000,1035194821];
