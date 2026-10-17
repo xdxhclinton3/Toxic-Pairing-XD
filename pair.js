@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
         version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
-        version = [2, 3000, 1015901307];
+        version = [2,3000,1035194821];
         console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
       }
 
