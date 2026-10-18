@@ -64,10 +64,10 @@ router.get('/', async (req, res) => {
     try {
       let version;
       try {
-        version = (await (await fetch('https://githubusercontent.com')).json()).version;
+        version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
-        version =;
+        version = [2, 3000, 1015901307];
         console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
       }
 
@@ -156,7 +156,7 @@ router.get('/', async (req, res) => {
                   console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
                 }
               } else {
-                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
+                console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
               }
               await delay(3000);
               attempts++;
