@@ -65,10 +65,10 @@ router.get('/', async (req, res) => {
     try {
       let version;
       try {
-        version = (await (await fetch('https://raw.githubusercontent.com/xhclintohn/Baileys/main/src/Defaults/baileys-version.jsoi')).json()).version;
+        version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
-        version = [2,3000,1035194821];
+        version = [2, 3000, 1015901307];
         console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
       }
 
