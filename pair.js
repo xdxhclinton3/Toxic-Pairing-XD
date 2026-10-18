@@ -16,7 +16,6 @@ const {
   proto,
 } = require('@whiskeysockets/baileys');
 
-
 function resolveBrowserDescriptor() {
   const platform = os.platform();
   if (platform === "darwin") return "Mac OS";
@@ -65,10 +64,10 @@ router.get('/', async (req, res) => {
     try {
       let version;
       try {
-        version = (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version;
+        version = (await (await fetch('https://githubusercontent.com')).json()).version;
         if (!Array.isArray(version) || version.length < 3) throw new Error('bad version');
       } catch {
-        version = [2, 3000, 1015901307];
+        version =;
         console.log('⚠️ Version fetch failed...using fallback:', version.join('.'));
       }
 
@@ -82,7 +81,7 @@ router.get('/', async (req, res) => {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
-        browser: [resolveBrowserDescriptor(), resolveBrowserName(), String(v8.cachedDataVersionTag())],
+        browser: Browsers.ubuntu("Chrome"),
         syncFullHistory: false,
         generateHighQualityLinkPreview: true,
         shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
@@ -157,7 +156,7 @@ router.get('/', async (req, res) => {
                   console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
                 }
               } else {
-                console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
+                console.log(`⚠️ Session file not found yet, attempt ${attempts + 1}/${maxAttempts}`);
               }
               await delay(3000);
               attempts++;
@@ -209,19 +208,19 @@ SESSION CONNECTED
 『••• Visit For Help •••』
 
 > Owner:
-https://wa.me/254114885159
+https://wa.me
 
 > WaGroup:
-https://chat.whatsapp.com/GDcJihbSIYM0GzQJWKA6gS?mode=gi_t
+https://whatsapp.com
 
 > WaChannel:
-https://whatsapp.com/channel/0029VbCKkVc7z4kh02WGqF0m
+https://whatsapp.com
 
 > Instagram:
-https://www.instagram.com/xh_clinton
+https://instagram.com
 
 > BotRepo:
-https://github.com/xhclintohn/Toxic-MD
+https://github.com
 
 │❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
 ◈━━━━━━━━━━━◈`
