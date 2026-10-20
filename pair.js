@@ -1,6 +1,4 @@
 const express = require('express');
-const os = require('os');
-const v8 = require('v8');
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
@@ -9,26 +7,13 @@ const { makeid } = require('./id');
 const {
   default: Toxic_Tech,
   useMultiFileAuthState,
+  Browsers,
   delay,
   makeCacheableSignalKeyStore,
   fetchLatestBaileysVersion,
   generateWAMessageFromContent,
   proto,
 } = require('@whiskeysockets/baileys');
-
-function resolveBrowserDescriptor() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Mac OS";
-  if (platform === "win32") return "Windows";
-  if (platform === "linux") return "Ubuntu";
-  return os.type();
-}
-function resolveBrowserName() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Safari";
-  if (platform === "win32") return "Edge";
-  return "Chrome";
-}
 
 const router = express.Router();
 const tempRoot = path.join(__dirname, 'temp');
@@ -54,6 +39,7 @@ router.get('/', async (req, res) => {
   let finished = false;
   let reconnecting = false;
   let pairingRequested = false;
+  let pairingCode = null;
   let sock = null;
 
   if (!num || num.length < 7) {
@@ -108,7 +94,7 @@ router.get('/', async (req, res) => {
         },
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: [resolveBrowserDescriptor(), resolveBrowserName(), String(v8.cachedDataVersionTag())],
+        browser: Browsers.ubuntu('Chrome'),
         syncFullHistory: false,
         connectTimeoutMs: 120000,
         keepAliveIntervalMs: 10000,
@@ -126,16 +112,27 @@ router.get('/', async (req, res) => {
 
           if (finished) return;
 
-          if ((qr || connection === 'connecting') && !state.creds.registered && !pairingRequested) {
+          // Only request on 'qr' — requesting on 'connecting' fires before
+          // the socket is ready to register the companion, and WhatsApp
+          // rejects the resulting code when the user enters it.
+          if (qr && !state.creds.registered && !pairingRequested) {
             pairingRequested = true;
             try {
-              await delay(1500);
-              const code = await sock.requestPairingCode(num);
+              await delay(3000);
+              if (finished) return;
+              // On a reconnect, re-register the SAME code so the code the
+              // user already has stays valid instead of dying with the
+              // previous socket.
+              const code = pairingCode
+                ? await sock.requestPairingCode(num, pairingCode)
+                : await sock.requestPairingCode(num);
+              pairingCode = code;
               if (!responseSent && !res.headersSent) {
                 res.json({ code });
                 responseSent = true;
               }
             } catch (err) {
+              pairingRequested = false;
               console.error('requestPairingCode error:', err);
               if (!responseSent && !res.headersSent) {
                 res.status(500).json({ code: 'Failed to generate pairing code' });
@@ -283,6 +280,11 @@ https://github.com/xhclintohn/Toxic-MD
               reconnecting = true;
               await delay(statusCode === 515 ? 1000 : 3000);
               reconnecting = false;
+              // Allow the new socket to re-register the pairing code
+              // (same code, see above) if pairing hasn't completed yet.
+              // After a successful pairing creds.registered is true, so
+              // no new code is requested on the post-pairing restart.
+              if (!state.creds.registered) pairingRequested = false;
               return startSocket();
             }
           }
