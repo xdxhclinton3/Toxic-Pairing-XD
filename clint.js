@@ -10,6 +10,16 @@ const express = require('express');
   app.use(bodyParser.urlencoded({ extended: true }));
   app.use('/qr/code', server);
   app.use('/code', code);
+  const { loadRetrievalBundle } = require('./sessionBundle');
+  app.get('/session/:code', async (req, res) => {
+  const bundle = loadRetrievalBundle(req.params.code);
+  if (!bundle) {
+  return res.status(404).send('Not found or expired');
+  }
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(bundle);
+  })
   app.use('/qr', async (req, res, next) => {
   res.sendFile(__path + '/qr_page.html')
   })

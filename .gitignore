@@ -6,3 +6,4 @@ session.json
 creds.json
 .DS_Store
 *.session
+vault/
