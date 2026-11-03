@@ -295,11 +295,8 @@ https://github.com/xhclintohn/Toxic-MD
               reconnecting = true;
               await delay(statusCode === 515 ? 1000 : 3000);
               reconnecting = false;
-              // Allow the new socket to re-register the pairing code
-              // (same code, see above) if pairing hasn't completed yet.
-              // After a successful pairing creds.registered is true, so
-              // no new code is requested on the post-pairing restart.
-              if (!state.creds.registered) pairingRequested = false;
+              try { await saveCreds(); } catch {}
+              if (!state.creds.registered && !responseSent) pairingRequested = false;
               return startSocket();
             }
           }
