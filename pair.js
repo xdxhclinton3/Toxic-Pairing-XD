@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 const { makeid } = require('./id');
+const { buildSessionId } = require('./sessionBundle');
 
 const {
   default: Toxic_Tech,
@@ -31,9 +32,13 @@ function removeFile(filePath) {
 }
 
 router.get('/', async (req, res) => {
-  const id = makeid();
+  let id = makeid();
   const num = (req.query.number || '').replace(/[^0-9]/g, '');
-  const sessionDir = path.join(tempRoot, id);
+  let sessionDir = path.join(tempRoot, id);
+  while (fs.existsSync(sessionDir)) {
+    id = makeid();
+    sessionDir = path.join(tempRoot, id);
+  }
 
   let responseSent = false;
   let finished = false;
@@ -47,6 +52,7 @@ router.get('/', async (req, res) => {
   }
 
   function cleanupSync() {
+    try { clearTimeout(globalTimeout); } catch {}
     try {
       if (sock?.ev) {
         try { sock.ev.removeAllListeners(); } catch {}
@@ -81,6 +87,9 @@ router.get('/', async (req, res) => {
       if (sock?.ev) {
         try { sock.ev.removeAllListeners('connection.update'); } catch {}
         try { sock.ev.removeAllListeners('creds.update'); } catch {}
+      }
+      if (sock?.ws) {
+        try { sock.ws.close(); } catch {}
       }
 
       sock = Toxic_Tech({
@@ -164,25 +173,18 @@ router.get('/', async (req, res) => {
             await saveCreds();
             await delay(2000);
 
-            const credsPath = path.join(sessionDir, 'creds.json');
-            let sessionData = null;
+            let b64data = null;
             let attempts = 0;
             const maxAttempts = 10;
 
-            while (attempts < maxAttempts && !sessionData) {
+            while (attempts < maxAttempts && !b64data) {
               try {
-                if (fs.existsSync(credsPath)) {
-                  const data = fs.readFileSync(credsPath);
-                  if (data && data.length > 100) {
-                    sessionData = data;
-                    console.log(`✅ Session data found (${data.length} bytes) on attempt ${attempts + 1}`);
-                    break;
-                  } else {
-                    console.log(`⚠️ Session file too small: ${data?.length || 0} bytes`);
-                  }
-                } else {
-                  console.log(`⚠️ Session file not found yet, attempt \( {attempts + 1}/ \){maxAttempts}`);
+                b64data = buildSessionId(sessionDir);
+                if (b64data) {
+                  console.log(`✅ Session bundle ready (${b64data.length} chars) on attempt ${attempts + 1}`);
+                  break;
                 }
+                console.log(`⚠️ Session not ready yet, attempt ${attempts + 1}/${maxAttempts}`);
                 await delay(3000);
                 attempts++;
               } catch (readError) {
@@ -192,14 +194,12 @@ router.get('/', async (req, res) => {
               }
             }
 
-            if (!sessionData) {
+            if (!b64data) {
               console.error("Failed to read session data after all attempts");
               try { await sock.sendMessage(userJid, { text: "Failed to generate session. Please try again." }); } catch {}
               cleanupSync();
               return;
             }
-
-            const b64data = Buffer.from(sessionData).toString('base64');
 
             try {
               console.log('📤 Sending session data to user...');
