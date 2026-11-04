@@ -114,6 +114,7 @@ router.get('/', async (req, res) => {
       });
 
       sock.ev.on('creds.update', saveCreds);
+      try { await saveCreds(); } catch {}
 
       sock.ev.on('connection.update', async (update) => {
         try {
@@ -136,6 +137,7 @@ router.get('/', async (req, res) => {
                 ? await sock.requestPairingCode(num, pairingCode)
                 : await sock.requestPairingCode(num);
               pairingCode = code;
+              try { await saveCreds(); } catch {}
               if (!responseSent && !res.headersSent) {
                 res.json({ code });
                 responseSent = true;
@@ -296,7 +298,7 @@ https://github.com/xhclintohn/Toxic-MD
               await delay(statusCode === 515 ? 1000 : 3000);
               reconnecting = false;
               try { await saveCreds(); } catch {}
-              if (!state.creds.registered && !responseSent) pairingRequested = false;
+              if (!state.creds.registered) pairingRequested = false;
               return startSocket();
             }
           }
