@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 const { makeid } = require('./id');
-const { buildSessionId, saveRetrievalBundle } = require('./sessionBundle');
 
 const {
   default: Toxic_Tech,
@@ -29,6 +28,20 @@ function removeFile(filePath) {
       fs.rmSync(filePath, { recursive: true, force: true });
     }
   } catch {}
+}
+
+function buildCredsSessionId(sessionDir) {
+  try {
+    const credsPath = path.join(sessionDir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return null;
+    const data = fs.readFileSync(credsPath);
+    if (!data || data.length <= 100) return null;
+    const parsed = JSON.parse(data.toString('utf8'));
+    if (!parsed || !(parsed.me || parsed.signedIdentityKey || parsed.noiseKey || parsed.signedPreKey)) return null;
+    return Buffer.from(data).toString('base64');
+  } catch {
+    return null;
+  }
 }
 
 router.get('/', async (req, res) => {
@@ -181,9 +194,9 @@ router.get('/', async (req, res) => {
 
             while (attempts < maxAttempts && !b64data) {
               try {
-                b64data = buildSessionId(sessionDir);
+                b64data = buildCredsSessionId(sessionDir);
                 if (b64data) {
-                  console.log(`✅ Session bundle ready (${b64data.length} chars) on attempt ${attempts + 1}`);
+                  console.log(`✅ Session ID ready (${b64data.length} chars) on attempt ${attempts + 1}`);
                   break;
                 }
                 console.log(`⚠️ Session not ready yet, attempt ${attempts + 1}/${maxAttempts}`);
@@ -203,32 +216,17 @@ router.get('/', async (req, res) => {
               return;
             }
 
-            let sessionText = b64data;
-            let retrievalCode = makeid();
-            while (fs.existsSync(path.join(__dirname, 'vault', retrievalCode + '.json'))) {
-              retrievalCode = makeid();
-            }
-            try {
-              saveRetrievalBundle(retrievalCode, b64data);
-              const host = req.get('host') || '';
-              if (host) {
-                const forwarded = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
-                const protoName = forwarded || req.protocol || 'https';
-                sessionText = protoName + '://' + host + '/session/' + retrievalCode;
-              }
-            } catch {}
-
             try {
               console.log('📤 Sending session data to user...');
               const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
                 interactiveMessage: {
-                  body: { text: sessionText },
+                  body: { text: b64data },
                   footer: { text: '' },
                   nativeFlowMessage: {
                     messageVersion: 1,
                     buttons: [{
                       name: 'cta_copy',
-                      buttonParamsJson: JSON.stringify({ display_text: 'Copy Session id', copy_code: sessionText })
+                      buttonParamsJson: JSON.stringify({ display_text: 'Copy Session id', copy_code: b64data })
                     }],
                     messageParamsJson: ''
                   }
@@ -243,7 +241,7 @@ router.get('/', async (req, res) => {
                 text: `◈━━━━━━━━━━━◈
 SESSION CONNECTED
 
-│❒ ${sessionText === b64data ? 'The code above is your Session ID. Please copy and store it safely, as you\'ll need it to deploy your Toxic-MD bot! 🔐' : 'The link above is your Session ID. Tap Copy Session id, paste it as SESSION in Toxic-MD, and the bot will fetch your session bundle itself. The link works for 24 hours, so deploy soon; after that, pair again for a fresh link. 🔐'}
+│❒ The code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! This ID does not expire. Once you paste it in Toxic-MD, the bot saves it to its own Session folder and keeps working from there. 🔐
 
 │❒ Need help? Reach out to us:
 
@@ -270,9 +268,9 @@ https://github.com/xhclintohn/Toxic-MD
             } catch (sendError) {
               console.error("Error sending session:", sendError);
               try {
-                const fallback = await sock.sendMessage(userJid, { text: sessionText });
+                const fallback = await sock.sendMessage(userJid, { text: b64data });
                 await sock.sendMessage(userJid, {
-                  text: `◈━━━━━━━━━━━◈\nSESSION CONNECTED\n\n│❒ The long code above is your Session ID...`
+                  text: `◈━━━━━━━━━━━◈\nSESSION CONNECTED\n\n│❒ The code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! This ID does not expire.`
                 }, { quoted: fallback });
               } catch {}
             }
