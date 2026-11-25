@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 const { makeid } = require('./id');
+const { acquire, release } = require('./guard');
 
 const {
   default: Toxic_Tech,
@@ -10,7 +11,6 @@ const {
   Browsers,
   delay,
   makeCacheableSignalKeyStore,
-  fetchLatestBaileysVersion,
   generateWAMessageFromContent,
   proto,
 } = require('@whiskeysockets/baileys');
@@ -55,13 +55,26 @@ router.get('/', async (req, res) => {
 
   let responseSent = false;
   let finished = false;
-  let reconnecting = false;
   let pairingRequested = false;
   let pairingCode = null;
   let sock = null;
+  let reconnectAttempts = 0;
+  let guardHeld = false;
 
   if (!num || num.length < 7) {
     return res.status(400).json({ code: 'Please provide a valid phone number.' });
+  }
+
+  if (!acquire(num)) {
+    return res.status(429).json({ code: 'Server is busy right now. Please try again in a moment.' });
+  }
+  guardHeld = true;
+
+  function releaseGuard() {
+    if (guardHeld) {
+      guardHeld = false;
+      release(num);
+    }
   }
 
   function cleanupSync() {
@@ -75,6 +88,7 @@ router.get('/', async (req, res) => {
       }
     } catch {}
     removeFile(sessionDir);
+    releaseGuard();
   }
 
   async function fail(message, status) {
@@ -95,7 +109,6 @@ router.get('/', async (req, res) => {
       }
 
       const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-      const { version } = await fetchLatestBaileysVersion();
 
       if (sock?.ev) {
         try { sock.ev.removeAllListeners('connection.update'); } catch {}
@@ -106,7 +119,6 @@ router.get('/', async (req, res) => {
       }
 
       sock = Toxic_Tech({
-        version,
         auth: {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(
@@ -114,20 +126,18 @@ router.get('/', async (req, res) => {
             pino({ level: 'silent' })
           ),
         },
-        printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.ubuntu('Chrome'),
+        browser: Browsers.android('Chrome'),
         syncFullHistory: false,
         connectTimeoutMs: 120000,
         keepAliveIntervalMs: 10000,
         retryRequestDelayMs: 2000,
-        maxRetries: 10,
         generateHighQualityLinkPreview: true,
         markOnlineOnConnect: false,
       });
 
       sock.ev.on('creds.update', saveCreds);
-      try { await saveCreds(); } catch {}
+      try { await saveCreds(); } catch (e) { console.error('[pair]', id, 'initial saveCreds:', e?.message || e); }
 
       sock.ev.on('connection.update', async (update) => {
         try {
@@ -143,6 +153,15 @@ router.get('/', async (req, res) => {
             try {
               await delay(3000);
               if (finished) return;
+              try {
+                const [check] = await sock.onWhatsApp(num).catch(() => []);
+                if (check && check.exists === false) {
+                  return await fail('That number is not on WhatsApp.');
+                }
+              } catch (e) {
+                console.error('[pair]', id, 'onWhatsApp check failed:', e?.message || e);
+              }
+              if (finished) return;
               // On a reconnect, re-register the SAME code so the code the
               // user already has stays valid instead of dying with the
               // previous socket.
@@ -150,7 +169,7 @@ router.get('/', async (req, res) => {
                 ? await sock.requestPairingCode(num, pairingCode)
                 : await sock.requestPairingCode(num);
               pairingCode = code;
-              try { await saveCreds(); } catch {}
+              try { await saveCreds(); } catch (e) { console.error('[pair]', id, 'saveCreds after code:', e?.message || e); }
               if (!responseSent && !res.headersSent) {
                 res.json({ code });
                 responseSent = true;
@@ -168,11 +187,17 @@ router.get('/', async (req, res) => {
           if (connection === 'open') {
             finished = true;
 
-            try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch {}
+            try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch (e) { console.error('[pair]', id, 'newsletterFollow:', e?.message || e); }
 
-            const userJid = sock.user.id.includes(':')
-              ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
-              : sock.user.id;
+            const rawUserId = sock.user?.id;
+            if (!rawUserId) {
+              console.error('[pair]', id, 'connected but sock.user.id is missing');
+              cleanupSync();
+              return;
+            }
+            const userJid = rawUserId.includes(':')
+              ? rawUserId.split(':')[0] + '@s.whatsapp.net'
+              : rawUserId;
 
             try {
               await sock.sendMessage(userJid, {
@@ -291,14 +316,16 @@ https://github.com/xhclintohn/Toxic-MD
               return await fail('Logged out. Please try again.');
             }
 
-            if (!reconnecting) {
-              reconnecting = true;
-              await delay(statusCode === 515 ? 1000 : 3000);
-              reconnecting = false;
-              try { await saveCreds(); } catch {}
-              if (!state.creds.registered) pairingRequested = false;
-              return startSocket();
+            reconnectAttempts++;
+            if (reconnectAttempts > 6) {
+              return await fail('Connection lost. Please try again.');
             }
+            const wait = statusCode === 515 ? 1000 : Math.min(3000 * Math.pow(1.5, reconnectAttempts - 1), 15000);
+            await delay(wait);
+            if (finished) return;
+            try { await saveCreds(); } catch (e) { console.error('[pair]', id, 'saveCreds on reconnect:', e?.message || e); }
+            if (!state.creds.registered) pairingRequested = false;
+            return startSocket();
           }
 
         } catch (err) {
