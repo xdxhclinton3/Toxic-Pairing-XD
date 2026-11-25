@@ -211,6 +211,7 @@ router.get('/', async (req, res) => {
                             return;
                         }
 
+                        let sentSession = null;
                         try {
                             console.log(' Sending session data to user...');
                             const sessionMsg = await generateWAMessageFromContent(userJid, proto.Message.fromObject({
@@ -228,48 +229,32 @@ router.get('/', async (req, res) => {
                                 }
                             }), { userJid: sock.user.id });
 
-                            const sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
+                            sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
+                        } catch (sendError) {
+                            console.error('[qr]', id, 'copy-button session send failed, falling back to plain text:', sendError?.message || sendError);
+                            try { sentSession = await sock.sendMessage(userJid, { text: b64data }); } catch (e) { console.error('[qr]', id, 'plain session send failed:', e?.message || e); }
+                        }
 
+                        try {
                             await delay(3000);
-
                             await sock.sendMessage(
                                 userJid,
                                 {
                                     text: `◈━━━━━━━━━━━◈
-SESSION CONNECTED
+SESSION CONNECTED ✅️
 
-│❒ The code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! This ID does not expire. Once you paste it in Toxic-MD, the bot saves it to its own Session folder and keeps working from there. 🔐
+│❒ The long code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! This ID does not expire.
 
-│❒ Need help? Reach out to us:
+│❒ Repo:
+github.com/xhclintohn/Toxic-MD
 
-『••• Visit For Help •••』
-
-> Owner:
-https://wa.me/254114885159
-
-> WaGroup:
-https://chat.whatsapp.com/GDcJihbSIYM0GzQJWKA6gS?mode=gi_t
-
-> WaChannel:
-https://whatsapp.com/channel/0029VbCKkVc7z4kh02WGqF0m
-
-> Instagram:
-https://www.instagram.com/xh_clinton
-
-> BotRepo:
-https://github.com/xhclintohn/Toxic-MD
-
-│❒ Don't forget to give a ⭐ to our repo and fork it to stay updated! :)
-◈━━━━━━━━━━━◈`
+│❒ Wanna Deploy/Run your bot¿
+https://hosting.nyxtechs.net`
                                 },
-                                { quoted: sentSession }
+                                sentSession ? { quoted: sentSession } : {}
                             );
-                        } catch (sendError) {
-                            console.error("Error sending session:", sendError);
-                            try {
-                                const fallback = await sock.sendMessage(userJid, { text: b64data });
-                                await sock.sendMessage(userJid, { text: `◈━━━━━━━━━━━◈\nSESSION CONNECTED\n\n│❒ The code above is your Session ID. Please copy and store it safely, as you'll need it to deploy your Toxic-MD bot! This ID does not expire.` }, { quoted: fallback });
-                            } catch {}
+                        } catch (e) {
+                            console.error('[qr]', id, 'follow-up send failed:', e?.message || e);
                         }
 
                         await delay(1000);
