@@ -1,11 +1,10 @@
 const { makeid } = require('./id');
-const os = require('os');
-const v8 = require('v8');
 const QRCode = require('qrcode');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
+const { acquire, release } = require('./guard');
 
 const {
     default: Toxic_Tech,
@@ -13,25 +12,9 @@ const {
     Browsers,
     delay,
     makeCacheableSignalKeyStore,
-    fetchLatestBaileysVersion,
     generateWAMessageFromContent,
     proto
 } = require('@whiskeysockets/baileys');
-
-
-function resolveBrowserDescriptor() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Mac OS";
-  if (platform === "win32") return "Windows";
-  if (platform === "linux") return "Ubuntu";
-  return os.type();
-}
-function resolveBrowserName() {
-  const platform = os.platform();
-  if (platform === "darwin") return "Safari";
-  if (platform === "win32") return "Edge";
-  return "Chrome";
-}
 
 const router = express.Router();
 const tempRoot = path.join(__dirname, 'temp');
@@ -72,8 +55,21 @@ router.get('/', async (req, res) => {
 
     let responseSent = false;
     let finished     = false;
-    let reconnecting = false;
     let sock         = null;
+    let reconnectAttempts = 0;
+    let guardHeld = false;
+
+    if (!acquire()) {
+        return res.status(429).json({ code: 'Server is busy right now. Please try again in a moment.' });
+    }
+    guardHeld = true;
+
+    function releaseGuard() {
+        if (guardHeld) {
+            guardHeld = false;
+            release();
+        }
+    }
 
     function cleanupSync() {
         try { clearTimeout(globalTimeout); } catch {}
@@ -86,6 +82,7 @@ router.get('/', async (req, res) => {
             }
         } catch {}
         removeFile(sessionDir);
+        releaseGuard();
     }
 
     async function fail(message, status) {
@@ -106,7 +103,6 @@ router.get('/', async (req, res) => {
             }
 
             const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-            const { version } = await fetchLatestBaileysVersion();
 
             if (sock?.ev) {
                 try { sock.ev.removeAllListeners('connection.update'); } catch {}
@@ -117,7 +113,6 @@ router.get('/', async (req, res) => {
             }
 
             sock = Toxic_Tech({
-                version,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(
@@ -125,14 +120,12 @@ router.get('/', async (req, res) => {
                         pino({ level: 'silent' })
                     ),
                 },
-                printQRInTerminal:              false,
                 logger:                         pino({ level: 'silent' }),
-                browser: [resolveBrowserDescriptor(), resolveBrowserName(), String(v8.cachedDataVersionTag())],
+                browser:                        Browsers.android('Chrome'),
                 syncFullHistory:                false,
                 connectTimeoutMs:               120000,
                 keepAliveIntervalMs:            10000,
                 retryRequestDelayMs:            2000,
-                maxRetries:                     10,
                 generateHighQualityLinkPreview: true,
                 markOnlineOnConnect:            false,
             });
@@ -164,11 +157,17 @@ router.get('/', async (req, res) => {
                     if (connection === 'open') {
                         finished = true;
 
-                        try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch {}
+                        try { await sock.newsletterFollow('120363425667150709@newsletter'); } catch (e) { console.error('[qr]', id, 'newsletterFollow:', e?.message || e); }
 
-                        const userJid = sock.user.id.includes(':')
-                            ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
-                            : sock.user.id;
+                        const rawUserId = sock.user?.id;
+                        if (!rawUserId) {
+                            console.error('[qr]', id, 'connected but sock.user.id is missing');
+                            cleanupSync();
+                            return;
+                        }
+                        const userJid = rawUserId.includes(':')
+                            ? rawUserId.split(':')[0] + '@s.whatsapp.net'
+                            : rawUserId;
 
                         try {
                             await sock.sendMessage(userJid, {
@@ -289,12 +288,14 @@ https://github.com/xhclintohn/Toxic-MD
                             return await fail('Logged out. Please try again.');
                         }
 
-                        if (!reconnecting) {
-                            reconnecting = true;
-                            await delay(statusCode === 515 ? 1000 : 3000);
-                            reconnecting = false;
-                            return startSocket();
+                        reconnectAttempts++;
+                        if (reconnectAttempts > 6) {
+                            return await fail('Connection lost. Please try again.');
                         }
+                        const wait = statusCode === 515 ? 1000 : Math.min(3000 * Math.pow(1.5, reconnectAttempts - 1), 15000);
+                        await delay(wait);
+                        if (finished) return;
+                        return startSocket();
                     }
 
                 } catch (err) {
