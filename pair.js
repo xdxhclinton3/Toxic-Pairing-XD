@@ -127,7 +127,7 @@ router.get('/', async (req, res) => {
           ),
         },
         logger: pino({ level: 'silent' }),
-        browser: Browsers.ubuntu('Chrome'),
+        browser: Browsers.android('Chrome'),
         syncFullHistory: false,
         connectTimeoutMs: 120000,
         keepAliveIntervalMs: 10000,
@@ -151,10 +151,12 @@ router.get('/', async (req, res) => {
           if (qr && !state.creds.registered && !pairingRequested) {
             pairingRequested = true;
             try {
-              await delay(3000);
-              if (finished) return;
               try {
-                const [check] = await sock.onWhatsApp(num).catch(() => []);
+                const checkResult = await Promise.race([
+                  sock.onWhatsApp(num).catch(() => []),
+                  delay(1500).then(() => null),
+                ]);
+                const check = Array.isArray(checkResult) ? checkResult[0] : null;
                 if (check && check.exists === false) {
                   return await fail('That number is not on WhatsApp.');
                 }
