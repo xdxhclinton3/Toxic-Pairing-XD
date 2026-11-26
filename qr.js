@@ -229,7 +229,8 @@ router.get('/', async (req, res) => {
                                 }
                             }), { userJid: sock.user.id });
 
-                            sentSession = await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
+                            await sock.relayMessage(userJid, sessionMsg.message, { messageId: sessionMsg.key.id });
+                            sentSession = sessionMsg;
                         } catch (sendError) {
                             console.error('[qr]', id, 'copy-button session send failed, falling back to plain text:', sendError?.message || sendError);
                             try { sentSession = await sock.sendMessage(userJid, { text: b64data }); } catch (e) { console.error('[qr]', id, 'plain session send failed:', e?.message || e); }
