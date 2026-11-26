@@ -121,7 +121,7 @@ router.get('/', async (req, res) => {
                     ),
                 },
                 logger:                         pino({ level: 'silent' }),
-                browser:                        Browsers.android('Chrome'),
+                browser:                        Browsers.ubuntu('Chrome'),
                 syncFullHistory:                false,
                 connectTimeoutMs:               120000,
                 keepAliveIntervalMs:            10000,
